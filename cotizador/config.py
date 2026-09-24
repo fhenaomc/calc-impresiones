@@ -1,0 +1,104 @@
+"""Configuración del cotizador: valores por defecto y lectura/escritura de config.json.
+
+La idea clave: el programa SIEMPRE tiene un juego completo de valores por defecto
+(CONFIG_POR_DEFECTO). El archivo config.json solo "sobrescribe" lo que el usuario
+haya cambiado. Así, si en una versión futura agregamos un ajuste nuevo, los
+config.json viejos siguen funcionando: el ajuste nuevo toma su valor por defecto.
+"""
+
+import copy
+import json
+import sys
+from pathlib import Path
+
+NOMBRE_ARCHIVO = "config.json"
+
+CONFIG_POR_DEFECTO = {
+    # --- Tóner -------------------------------------------------------------
+    # Rendimiento = páginas que imprime un cartucho con 5 % de cobertura (norma del fabricante).
+    "toner": {
+        "C": {"precio": 200000, "rendimiento": 17000},
+        "M": {"precio": 200000, "rendimiento": 17000},
+        "Y": {"precio": 200000, "rendimiento": 17000},
+        "K": {"precio": 180000, "rendimiento": 28000},
+    },
+    "cobertura_referencia_pct": 5.0,
+
+    # --- Papel -------------------------------------------------------------
+    # Medidas en mm. El área relativa a carta escala el consumo de tinta.
+    # PROVISIONAL: precio de doble carta sin confirmar; medida de oficio por confirmar.
+    "papel": {
+        "carta":       {"nombre": "Carta",       "ancho_mm": 215.9, "alto_mm": 279.4, "precio_resma": 15000, "hojas_resma": 500},
+        "oficio":      {"nombre": "Oficio",      "ancho_mm": 215.9, "alto_mm": 330.2, "precio_resma": 19000, "hojas_resma": 500},
+        "doble_carta": {"nombre": "Doble carta", "ancho_mm": 279.4, "alto_mm": 431.8, "precio_resma": 30000, "hojas_resma": 500},
+    },
+
+    # --- Desgaste por página (tambores, revelador, fusor, energía) ---------
+    # PROVISIONAL: estimado; una página a color desgasta 4 unidades de imagen, b/n solo 1.
+    "desgaste_por_pagina": {"color": 40, "bn": 20},
+
+    # --- Precio --------------------------------------------------------------
+    "margen_pct": 40.0,          # precio = costo / (1 - margen)
+    "factor_correccion": 1.15,   # multiplica el costo de tinta; >1 = estimar por encima
+    "redondeo": 50,              # siempre hacia ARRIBA al múltiplo más cercano
+
+    # --- Análisis de imagen ------------------------------------------------
+    "analisis": {
+        "dpi": 75,                    # resolución para renderizar páginas
+        "umbral_croma": 0.10,         # 0-1: diferencia mínima entre R,G,B para que un píxel "tenga color"
+        "area_min_color_pct": 0.05,   # % de la hoja con color para considerarla página a color
+        "gcr": 0.5,                   # 0-1: cuánto de la mezcla CMY se reemplaza por K en píxeles de color
+    },
+
+    # --- Rangos (tarifa fija por rango) ------------------------------------
+    # Cada rango cubre páginas hasta cierta cobertura total (suma C+M+Y+K, en %).
+    # El precio del rango se calcula con el modelo de costos en su límite superior
+    # (así toda página del rango queda cobrada por encima de su costo real),
+    # salvo que se fije un "precio_manual" por tamaño, ej. {"carta": 1000}.
+    # Límites calibrados con muestras/referencia (ver herramientas/generar_referencias.py):
+    #   texto b/n ≈ 7 %, texto + título a color ≈ 13 %, foto media página ≈ 50-68 %,
+    #   dos fotos ≈ 100-117 %, foto página completa ≈ 145-180 %.
+    "rangos_bn": [
+        {"nombre": "B/N normal",   "cobertura_max_pct": 12,  "precio_manual": {}},
+        {"nombre": "B/N cargado",  "cobertura_max_pct": 40,  "precio_manual": {}},
+        {"nombre": "B/N total",    "cobertura_max_pct": 100, "precio_manual": {}},
+    ],
+    "rangos_color": [
+        {"nombre": "Color mínimo", "cobertura_max_pct": 20,  "precio_manual": {}},
+        {"nombre": "Color medio",  "cobertura_max_pct": 80,  "precio_manual": {}},
+        {"nombre": "Color alto",   "cobertura_max_pct": 140, "precio_manual": {}},
+        {"nombre": "Color total",  "cobertura_max_pct": 250, "precio_manual": {}},
+    ],
+}
+
+
+def carpeta_programa() -> Path:
+    """Carpeta donde vive el programa: junto al .exe si está empaquetado, o la raíz del proyecto."""
+    if getattr(sys, "frozen", False):  # PyInstaller marca sys.frozen = True
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+
+def _mezclar(base: dict, cambios: dict) -> dict:
+    """Mezcla recursiva: los valores de `cambios` reemplazan a los de `base`."""
+    resultado = copy.deepcopy(base)
+    for clave, valor in cambios.items():
+        if isinstance(valor, dict) and isinstance(resultado.get(clave), dict):
+            resultado[clave] = _mezclar(resultado[clave], valor)
+        else:
+            resultado[clave] = valor
+    return resultado
+
+
+def cargar(ruta: Path | None = None) -> dict:
+    ruta = ruta or carpeta_programa() / NOMBRE_ARCHIVO
+    if not ruta.exists():
+        return copy.deepcopy(CONFIG_POR_DEFECTO)
+    with open(ruta, encoding="utf-8") as f:
+        return _mezclar(CONFIG_POR_DEFECTO, json.load(f))
+
+
+def guardar(config: dict, ruta: Path | None = None) -> None:
+    ruta = ruta or carpeta_programa() / NOMBRE_ARCHIVO
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)

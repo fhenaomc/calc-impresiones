@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+build/
+dist/
+*.spec
+config.json
+
+# Documentos de clientes y fotos de Windows: no se versionan
+muestras/
