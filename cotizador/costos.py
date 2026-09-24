@@ -73,12 +73,15 @@ def tabla_rangos(config: dict, tamano: str, es_color: bool) -> list[dict]:
     for r in rangos:
         costo_lim = _costo_limite(config, r, tamano, es_color)
         manual = (r.get("precio_manual") or {}).get(tamano)
+        precio = int(manual) if manual else a_precio(config, costo_lim)
         tabla.append({
             "nombre": r["nombre"],
             "cobertura_max_pct": r["cobertura_max_pct"],
             "costo_limite": costo_lim,
-            "precio": int(manual) if manual else a_precio(config, costo_lim),
+            "precio": precio,
             "precio_es_manual": bool(manual),
+            # Alerta: un precio manual que ya no cubre el costo (p. ej. si subió el tóner).
+            "bajo_costo": precio < costo_lim,
         })
     return tabla
 

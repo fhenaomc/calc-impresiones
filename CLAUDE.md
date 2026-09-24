@@ -14,8 +14,14 @@ aprendiendo programación: **explicar las decisiones y el código**, no solo ent
 - Una página b/n muy cargada cuesta más que una normal.
 - **Siempre estimar por encima**: redondeo hacia arriba, factor de corrección > 1,
   precio del rango calculado en su límite superior con el tóner más caro.
-- Margen sobre precio de venta: `precio = costo / (1 − 0,40)`.
-- Un tamaño de papel por trabajo (carta, oficio, doble carta). Sin doble cara.
+- **Precios de venta fijos (acordados sep. 2026)**, en `precio_manual` de config:
+  B/N $700 en los 3 rangos; color mínimo $1.000, medio $2.000, alto $3.000, total $4.000.
+  Oficio = mismo precio que carta. El modelo de costos se usa para clasificar y para
+  alertar (`bajo_costo`) si un precio fijo deja de cubrir el costo máximo del rango.
+- Sin precio manual, el precio sale del modelo: `costo / (1 − 0,40)` redondeado arriba.
+- Reparto sugerido: (venta − tinta − papel) → 50 % capital (mantenimiento) / 50 % ganancia.
+  El desgaste no se resta aparte en ese reparto: lo cubre el capital.
+- Un tamaño de papel por trabajo: **carta u oficio** (no se imprime doble carta). Sin doble cara.
 - Resultado: resumen agrupado ("8 pág. B/N normal × $150 …") + detalle por página.
 - Moneda: pesos colombianos, formato `$1.250`.
 
@@ -42,6 +48,7 @@ cotizador/costos.py      modelo de costos, rangos, cotización y resumen
 cotizador/cli.py         prueba por consola
 tests/                   pytest con imágenes sintéticas de cobertura conocida
 herramientas/generar_referencias.py   PDFs de referencia por rango (fotos de Windows)
+herramientas/generar_tabla_precios.py documentos/Tabla de precios.xlsx (para aprobación de los dueños)
 muestras/                archivos reales de prueba (NO se versionan: datos de clientes)
 ```
 
@@ -51,17 +58,22 @@ muestras/                archivos reales de prueba (NO se versionan: datos de cl
 .venv\Scripts\python -m cotizador.cli --rangos
 .venv\Scripts\python -m cotizador.cli muestras\archivo.pdf --detalle --tamano carta --copias 2
 .venv\Scripts\python herramientas\generar_referencias.py
+.venv\Scripts\python herramientas\generar_tabla_precios.py
 ```
-Entorno: Python 3.14 en `.venv` (PyMuPDF, Pillow, numpy, pytest). Importar `pymupdf`, no `fitz`.
+No hay LibreOffice en el PC de desarrollo: para recalcular/verificar el .xlsx se usa Excel vía
+pywin32 (`win32com.client.DispatchEx("Excel.Application")`, `CalculateFull`, `Save`).
+Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `fitz`.
 
 ## Datos de la impresora / costos (config por defecto)
 - Tóner C/M/Y: $200.000, rinde 17.000 pág. al 5 %. K: $180.000, 28.000 pág.
 - Papel: resma 500 hojas; carta $15.000, oficio $19.000.
-- PROVISIONAL (confirmar con el usuario): precio doble carta ($30.000/resma),
-  medida de oficio (216 × 330 mm), desgaste por página (color $40, b/n $20).
+- Oficio 216 × 330 mm (confirmado como estimado válido).
+- PROVISIONAL: desgaste por página (color $40, b/n $20).
+- Antes de esta calculadora cobraban b/n $700 y color entre $1.500 y $5.000.
 
 ## Plan por etapas
 1. ✅ Motor de cobertura y costos con PDF e imágenes, probado con `muestras/`.
+   ✅ Precios fijos por rango + tabla de precios en Excel para aprobación.
 2. ⬜ Interfaz tkinter + tkinterdnd2 (arrastrar y soltar, copias, tamaño, resumen, detalle).
 3. ⬜ Word/Excel/PowerPoint → PDF vía Office (pywin32 COM); LibreOffice como alternativa;
    mensaje claro si ninguno está.

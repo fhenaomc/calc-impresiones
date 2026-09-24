@@ -11,7 +11,11 @@ from cotizador.costos import a_precio, area_relativa, costo_por_pct, cotizar, ta
 
 @pytest.fixture
 def config():
-    return copy.deepcopy(CONFIG_POR_DEFECTO)
+    """Config sin precios manuales: así se prueba el modelo de costos puro."""
+    c = copy.deepcopy(CONFIG_POR_DEFECTO)
+    for r in c["rangos_bn"] + c["rangos_color"]:
+        r["precio_manual"] = {}
+    return c
 
 
 def pagina(c=0, m=0, y=0, k=0, es_color=None):
@@ -24,8 +28,8 @@ def test_costo_por_pct(config):
     assert costo_por_pct(config, "C") == pytest.approx(200000 / 17000 / 5)
 
 
-def test_area_doble_carta_es_el_doble(config):
-    assert area_relativa(config, "doble_carta") == pytest.approx(2.0)
+def test_area_oficio(config):
+    assert area_relativa(config, "oficio") == pytest.approx(330.2 / 279.4)
 
 
 def test_redondeo_siempre_hacia_arriba(config):
@@ -75,3 +79,17 @@ def test_pagina_saturada_sale_de_la_tabla_y_cobra_su_costo(config):
     p = cotizar(config, [pagina(c=100, m=100, y=100, k=50)]).paginas[0]
     assert p.fuera_de_tabla
     assert p.precio >= p.costo
+
+
+def test_precios_acordados_cubren_el_costo():
+    """Los precios fijos por defecto nunca deben quedar por debajo del costo máximo del rango."""
+    for tamano in CONFIG_POR_DEFECTO["papel"]:
+        for es_color in (False, True):
+            for r in tabla_rangos(CONFIG_POR_DEFECTO, tamano, es_color):
+                assert not r["bajo_costo"], (tamano, r["nombre"])
+
+
+def test_alerta_si_el_toner_sube_mucho(config):
+    config["rangos_color"][0]["precio_manual"] = {"carta": 1000}
+    config["toner"]["C"]["precio"] = 5_000_000  # tóner 25 veces más caro
+    assert tabla_rangos(config, "carta", es_color=True)[0]["bajo_costo"]

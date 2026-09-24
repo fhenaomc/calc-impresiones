@@ -25,6 +25,7 @@ def mostrar_rangos(config: dict) -> None:
         for es_color in (False, True):
             for r in tabla_rangos(config, tamano, es_color):
                 marca = " (manual)" if r["precio_es_manual"] else ""
+                marca += "  ⚠ PRECIO POR DEBAJO DEL COSTO" if r["bajo_costo"] else ""
                 print(f"  {r['nombre']:<14} hasta {r['cobertura_max_pct']:>4}%   "
                       f"costo {pesos(r['costo_limite']):>7}   precio {pesos(r['precio']):>7}{marca}")
 

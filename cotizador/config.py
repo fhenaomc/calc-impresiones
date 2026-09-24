@@ -26,11 +26,9 @@ CONFIG_POR_DEFECTO = {
 
     # --- Papel -------------------------------------------------------------
     # Medidas en mm. El área relativa a carta escala el consumo de tinta.
-    # PROVISIONAL: precio de doble carta sin confirmar; medida de oficio por confirmar.
     "papel": {
-        "carta":       {"nombre": "Carta",       "ancho_mm": 215.9, "alto_mm": 279.4, "precio_resma": 15000, "hojas_resma": 500},
-        "oficio":      {"nombre": "Oficio",      "ancho_mm": 215.9, "alto_mm": 330.2, "precio_resma": 19000, "hojas_resma": 500},
-        "doble_carta": {"nombre": "Doble carta", "ancho_mm": 279.4, "alto_mm": 431.8, "precio_resma": 30000, "hojas_resma": 500},
+        "carta":  {"nombre": "Carta",  "ancho_mm": 215.9, "alto_mm": 279.4, "precio_resma": 15000, "hojas_resma": 500},
+        "oficio": {"nombre": "Oficio", "ancho_mm": 215.9, "alto_mm": 330.2, "precio_resma": 19000, "hojas_resma": 500},
     },
 
     # --- Desgaste por página (tambores, revelador, fusor, energía) ---------
@@ -58,16 +56,18 @@ CONFIG_POR_DEFECTO = {
     # Límites calibrados con muestras/referencia (ver herramientas/generar_referencias.py):
     #   texto b/n ≈ 7 %, texto + título a color ≈ 13 %, foto media página ≈ 50-68 %,
     #   dos fotos ≈ 100-117 %, foto página completa ≈ 145-180 %.
+    # Precios de venta acordados (sep. 2026): b/n fijo $700; color $1.000 a $4.000.
+    # Oficio se cobra igual que carta (se vende poco y el margen lo permite).
     "rangos_bn": [
-        {"nombre": "B/N normal",   "cobertura_max_pct": 12,  "precio_manual": {}},
-        {"nombre": "B/N cargado",  "cobertura_max_pct": 40,  "precio_manual": {}},
-        {"nombre": "B/N total",    "cobertura_max_pct": 100, "precio_manual": {}},
+        {"nombre": "B/N normal",   "cobertura_max_pct": 12,  "precio_manual": {"carta": 700, "oficio": 700}},
+        {"nombre": "B/N cargado",  "cobertura_max_pct": 40,  "precio_manual": {"carta": 700, "oficio": 700}},
+        {"nombre": "B/N total",    "cobertura_max_pct": 100, "precio_manual": {"carta": 700, "oficio": 700}},
     ],
     "rangos_color": [
-        {"nombre": "Color mínimo", "cobertura_max_pct": 20,  "precio_manual": {}},
-        {"nombre": "Color medio",  "cobertura_max_pct": 80,  "precio_manual": {}},
-        {"nombre": "Color alto",   "cobertura_max_pct": 140, "precio_manual": {}},
-        {"nombre": "Color total",  "cobertura_max_pct": 250, "precio_manual": {}},
+        {"nombre": "Color mínimo", "cobertura_max_pct": 20,  "precio_manual": {"carta": 1000, "oficio": 1000}},
+        {"nombre": "Color medio",  "cobertura_max_pct": 80,  "precio_manual": {"carta": 2000, "oficio": 2000}},
+        {"nombre": "Color alto",   "cobertura_max_pct": 140, "precio_manual": {"carta": 3000, "oficio": 3000}},
+        {"nombre": "Color total",  "cobertura_max_pct": 250, "precio_manual": {"carta": 4000, "oficio": 4000}},
     ],
 }
 
