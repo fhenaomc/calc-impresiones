@@ -22,7 +22,7 @@ aprendiendo programación: **explicar las decisiones y el código**, no solo ent
 - Reparto sugerido: (venta − tinta − papel) → 50 % capital (mantenimiento) / 50 % ganancia.
   El desgaste no se resta aparte en ese reparto: lo cubre el capital.
 - Un tamaño de papel por trabajo: **carta u oficio** (no se imprime doble carta). Sin doble cara.
-- Resultado: resumen agrupado ("8 pág. B/N normal × $150 …") + detalle por página.
+- Resultado: resumen agrupado ("8 pág. B/N normal × $700 …") + detalle por página.
 - Moneda: pesos colombianos, formato `$1.250`.
 
 ## Modelo de costos (`cotizador/costos.py`)
