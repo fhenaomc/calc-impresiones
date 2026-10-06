@@ -68,7 +68,7 @@ CONFIG_POR_DEFECTO = {
     },
 
     # --- Apariencia (colores y demás en cotizador/tema.py) ------------------
-    "apariencia": {"tamano_letra": 12},
+    "apariencia": {"tema": "pixel", "tamano_letra": 12},   # tema: "pixel" (Net Papelería) o "clasico"
 
     # --- Rangos (tarifa fija por rango) ------------------------------------
     # Cada rango cubre páginas hasta cierta cobertura total (suma C+M+Y+K, en %).

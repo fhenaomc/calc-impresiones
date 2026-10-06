@@ -25,7 +25,7 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import ImageTk
 
 from . import config as cfg
-from . import tema
+from . import pixelart, tema
 from .cobertura import EXTENSIONES_IMAGEN, EXTENSIONES_PDF, analizar_archivo, imagen_pagina
 from .costos import BN, COLOR, cotizar, tabla_rangos
 from .formato import hojas, pesos
@@ -53,11 +53,15 @@ class App:
         self.copias = tk.IntVar(value=1)
         self.todo_bn = tk.BooleanVar(value=False)
 
+        preparar_estilo(config)
         self.C = tema.COLORES
-        self.F = tema.fuentes(config["apariencia"]["tamano_letra"])
-        root.title("Cotizador de impresiones")
-        root.configure(bg=self.C["fondo"])
+        self.escala = root.winfo_fpixels("1i") / 96  # 1,25 si Windows está al 125 %
+        self.F = tema.fuentes(config["apariencia"]["tamano_letra"], self.escala)
+        root.title("Net Papelería · Cotizador de impresiones")
+        root.configure(bg=self.C["marco"])
         root.minsize(620, 640)
+        self._icono = ImageTk.PhotoImage(pixelart.icono(32))
+        root.iconphoto(True, self._icono)  # True: también para las ventanas que se abran después
 
         self._construir()
         self._activar_soltar()
@@ -66,24 +70,34 @@ class App:
 
     # ------------------------------------------------------------------ construcción
     def _boton(self, padre, texto, comando, principal=False, **kw):
-        bg = self.C["primario"] if principal else self.C["panel"]
-        fg = self.C["primario_texto"] if principal else self.C["primario"]
-        return tk.Button(padre, text=texto, command=comando, font=self.F["boton"], bg=bg, fg=fg,
-                         activebackground=self.C["zona_activa"], relief="solid", bd=1,
-                         padx=12, pady=4, cursor="hand2", **kw)
+        return tk.Button(padre, text=texto, command=comando, **(tema.estilo_boton(self.F, principal) | kw))
 
     def _construir(self):
         C, F = self.C, self.F
-        marco = tk.Frame(self.root, bg=C["fondo"], padx=18, pady=14)
-        marco.pack(fill="both", expand=True)
+        # Marco grueso de color alrededor de todo (en estilo pixel; en clásico no se ve)
+        grosor = tema.ESTILO["grosor_marco"]
+        borde = tk.Frame(self.root, bg=C["fondo"], highlightthickness=grosor,
+                         highlightbackground=C["marco"], highlightcolor=C["marco"])
+        borde.pack(fill="both", expand=True)
 
-        # --- Encabezado
-        enc = tk.Frame(marco, bg=C["fondo"])
-        enc.pack(fill="x")
-        tk.Label(enc, text="Cotizador de impresiones", font=F["titulo"], fg=C["primario"],
-                 bg=C["fondo"]).pack(side="left")
-        self._boton(enc, "Costos", self.abrir_costos).pack(side="right")
-        self._boton(enc, "Precios", self.abrir_precios).pack(side="right", padx=(8, 0))
+        # --- Encabezado: barra fucsia con el logo en pixel art, o título simple en clásico
+        if tema.PIXEL:
+            enc = tk.Frame(borde, bg=C["marco"], padx=12, pady=8)
+            enc.pack(fill="x")
+            self._logo = ImageTk.PhotoImage(pixelart.encabezado(max(2, round(2 * self.escala))))
+            tk.Label(enc, image=self._logo, bg=C["marco"]).pack(side="left")
+        marco = tk.Frame(borde, bg=C["fondo"], padx=18, pady=14)
+        marco.pack(fill="both", expand=True)
+        if not tema.PIXEL:
+            enc = tk.Frame(marco, bg=C["fondo"])
+            enc.pack(fill="x")
+            tk.Label(enc, text="Cotizador de impresiones", font=F["titulo"], fg=C["primario"],
+                     bg=C["fondo"]).pack(side="left")
+        botones = tk.Frame(enc, bg=enc["bg"])
+        botones.pack(side="right", anchor="n" if tema.PIXEL else "center")
+        self._boton(botones, "Costos", self.abrir_costos).pack(side="right")
+        enc = botones
+        self._boton(enc, "Precios", self.abrir_precios).pack(side="right", padx=(0, 8))
         self._boton(enc, "Nueva cotización", self.limpiar).pack(side="right", padx=8)
 
         # --- Aviso (solo aparece si algún precio quedó por debajo del costo)
@@ -92,7 +106,7 @@ class App:
 
         # --- Zona para soltar el archivo
         self.zona = tk.Label(marco, font=F["soltar"], bg=C["zona_soltar"], fg=C["primario"],
-                             relief="ridge", bd=2, height=4, cursor="hand2")
+                             relief="ridge", bd=3 if tema.PIXEL else 2, height=4, cursor="hand2", justify="center")
         self.zona.pack(fill="x", pady=(12, 6))
         self.zona.bind("<Button-1>", lambda e: self.buscar_archivos())
         self.zona.bind("<Enter>", lambda e: self.zona.config(bg=C["zona_activa"]))
@@ -109,32 +123,35 @@ class App:
         # --- Opciones: tamaño y copias
         opc = tk.Frame(marco, bg=C["fondo"])
         opc.pack(fill="x", pady=12)
-        tk.Label(opc, text="Tamaño:", font=F["negrita"], bg=C["fondo"], fg=C["texto"]).pack(side="left")
+        tk.Label(opc, text="Tamaño:", font=F["seccion"], bg=C["fondo"], fg=C["primario"]).pack(side="left", padx=(0, 6))
         for clave, papel in self.config["papel"].items():
             # indicatoron=0 convierte el botón de opción en un botón grande que se queda hundido
             tk.Radiobutton(opc, text=papel["nombre"], value=clave, variable=self.tamano, indicatoron=0,
                            font=F["boton"], width=8, pady=4, bg=C["panel"], selectcolor=C["zona_activa"],
-                           cursor="hand2", command=self.recotizar).pack(side="left", padx=4)
+                           cursor="hand2", command=self.recotizar, **self._estilo_opcion()).pack(side="left", padx=4)
 
         self._boton(opc, "+", lambda: self.cambiar_copias(+1), width=2).pack(side="right")
-        tk.Label(opc, textvariable=self.copias, font=F["copias"], width=4, bg=C["panel"],
-                 fg=C["texto"], relief="solid", bd=1).pack(side="right", padx=4)
+        tk.Label(opc, textvariable=self.copias, font=F["copias"], width=3 if tema.PIXEL else 4, bg=C["panel"],
+                 fg=C["texto"], relief="sunken" if tema.PIXEL else "solid", bd=3 if tema.PIXEL else 1,
+                 padx=4).pack(side="right", padx=4)
         self._boton(opc, "−", lambda: self.cambiar_copias(-1), width=2).pack(side="right")
-        tk.Label(opc, text="Copias:", font=F["negrita"], bg=C["fondo"], fg=C["texto"]).pack(side="right", padx=6)
+        tk.Label(opc, text="Copias:", font=F["seccion"], bg=C["fondo"], fg=C["primario"]).pack(side="right", padx=6)
 
         # --- Impresión: lo que sugiere el programa, o todo en B/N si el cliente lo pide
         imp = tk.Frame(marco, bg=C["fondo"])
         imp.pack(fill="x", pady=(0, 12))
-        tk.Label(imp, text="Imprimir:", font=F["negrita"], bg=C["fondo"], fg=C["texto"]).pack(side="left")
+        tk.Label(imp, text="Imprimir:", font=F["seccion"], bg=C["fondo"], fg=C["primario"]).pack(side="left", padx=(0, 6))
         for texto, valor in (("Como sugiere el programa", False), ("Todo en blanco y negro", True)):
             tk.Radiobutton(imp, text=texto, value=valor, variable=self.todo_bn, indicatoron=0,
                            font=F["boton"], pady=4, padx=10, bg=C["panel"], selectcolor=C["zona_activa"],
-                           cursor="hand2", command=self.recotizar).pack(side="left", padx=4)
+                           cursor="hand2", command=self.recotizar, **self._estilo_opcion()).pack(side="left", padx=4)
 
         # --- Resumen
-        panel = tk.Frame(marco, bg=C["panel"], relief="solid", bd=1, padx=14, pady=10)
+        panel = tk.Frame(marco, bg=C["panel"], padx=14, pady=10,
+                         **({"highlightthickness": 3, "highlightbackground": C["borde"]} if tema.PIXEL
+                            else {"relief": "solid", "bd": 1}))
         panel.pack(fill="both", expand=True)
-        tk.Label(panel, text="Resumen", font=F["negrita"], bg=C["panel"], fg=C["texto"]).pack(anchor="w")
+        tk.Label(panel, text="Resumen", font=F["seccion"], bg=C["panel"], fg=C["primario"]).pack(anchor="w")
         self.resumen = tk.Frame(panel, bg=C["panel"])
         self.resumen.pack(fill="both", expand=True, pady=6)
 
@@ -144,8 +161,14 @@ class App:
         self.etiqueta_total.pack(side="left", anchor="s")
         self.total = tk.Label(pie, text="$0", font=F["total"], bg=C["panel"], fg=C["total"])
         self.total.pack(side="right")
-        self.boton_detalle = self._boton(panel, "Ver detalle hoja por hoja", self.abrir_detalle)
+        self.boton_detalle = self._boton(panel, "Ver detalle hoja por hoja", self.abrir_detalle, principal=True)
         self.boton_detalle.pack(anchor="e", pady=(6, 0))
+
+    def _estilo_opcion(self):
+        """Botones de opción (Carta/Oficio, Imprimir): con relieve de videojuego en estilo pixel."""
+        if tema.PIXEL:
+            return {"relief": "raised", "bd": 3, "offrelief": "raised", "fg": self.C["boton_texto"]}
+        return {}
 
     def _activar_soltar(self):
         texto = "Arrastre aquí el archivo\no haga clic para buscarlo"
@@ -303,14 +326,17 @@ class App:
 
     # ------------------------------------------------------------------ ventanas
     def actualizar_config(self, config):
-        """Se llama al iniciar y cuando se guardan precios nuevos."""
+        """Se llama al iniciar y cuando se guardan precios o costos nuevos."""
+        if config["apariencia"] != self.config["apariencia"]:
+            messagebox.showinfo("Estilo", "El nuevo estilo o tamaño de letra se verá\n"
+                                          "la próxima vez que abra el programa.")
         self.config = config
         malos = sorted({r["nombre"] for t in config["papel"] for color in (False, True)
                         for r in tabla_rangos(config, t, color) if r["bajo_costo"]})
         if malos:
             self.alerta.config(text="⚠ Estos precios no alcanzan a cubrir el costo: "
                                     + ", ".join(malos) + ". Revise en «Precios».")
-            self.alerta.pack(fill="x", pady=(8, 0), after=self.alerta.master.winfo_children()[0])
+            self.alerta.pack(fill="x", pady=(0, 8), before=self.zona)
         else:
             self.alerta.pack_forget()
         self.recotizar()
@@ -358,6 +384,8 @@ class VentanaDetalle(tk.Toplevel):
         estilo = ttk.Style(self)
         estilo.configure("Detalle.Treeview", font=fuentes["normal"], rowheight=int(fuentes["normal"][1] * 2.3))
         estilo.configure("Detalle.Treeview.Heading", font=fuentes["negrita"])
+        estilo.map("Detalle.Treeview", background=[("selected", C["primario"])],
+                   foreground=[("selected", C["primario_texto"])])
 
         trabajo = app.trabajo
         self.varios = len({r for r, _, _ in trabajo}) > 1
@@ -373,8 +401,7 @@ class VentanaDetalle(tk.Toplevel):
         botones = tk.Frame(izq, bg=C["fondo"])
         botones.pack(side="top", fill="x", pady=(0, 8))
         tk.Label(botones, text="Hojas seleccionadas:", font=fuentes["negrita"], bg=C["fondo"]).pack(side="left")
-        estilo_b = dict(font=fuentes["boton"], relief="solid", bd=1, padx=10, pady=3, cursor="hand2",
-                        bg=C["panel"], fg=C["primario"])
+        estilo_b = tema.estilo_boton(fuentes) | {"padx": 10, "pady": 3}
         tk.Button(botones, text="Blanco y negro", command=lambda: self._cambiar(BN), **estilo_b
                   ).pack(side="left", padx=4)
         tk.Button(botones, text="Color", command=lambda: self._cambiar(COLOR), **estilo_b
@@ -480,10 +507,25 @@ def _nitidez_windows():
         pass
 
 
+_fuente_cargada = False
+
+
+def preparar_estilo(config):
+    """Activa el estilo de config.json y carga la letra pixelada (una sola vez)."""
+    global _fuente_cargada
+    tema.activar(config["apariencia"].get("tema", "pixel"))
+    if tema.PIXEL and not _fuente_cargada:
+        _fuente_cargada = tema.cargar_fuente_pixel()
+        if not _fuente_cargada:  # sin la letra pixelada, mejor el estilo clásico que letras raras
+            tema.activar("clasico")
+
+
 def main():
     _nitidez_windows()
+    config = cfg.cargar()
+    preparar_estilo(config)  # antes de crear la ventana: la letra debe existir cuando Tk la pida
     root = TkinterDnD.Tk() if TkinterDnD is not None else tk.Tk()
-    App(root, cfg.cargar())
+    App(root, config)
     root.mainloop()
 
 

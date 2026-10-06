@@ -226,3 +226,32 @@ def test_limites_de_rangos_deben_crecer(root, monkeypatch):
     _campo(v, ("rangos_color", 1, "cobertura_max_pct")).var.set("10")  # medio < mínimo (20)
     with pytest.raises(ValueError, match="menor a mayor"):
         v._leer()
+
+
+# ----------------------------------------------------------------------------- estilos
+def test_estilo_clasico_sigue_funcionando(root):
+    from cotizador import tema
+    config = copy.deepcopy(cfg.CONFIG_POR_DEFECTO)
+    config["apariencia"]["tema"] = "clasico"
+    app = interfaz.App(root, config)
+    assert not tema.PIXEL and tema.COLORES["fondo"] == tema.TEMAS["clasico"]["colores"]["fondo"]
+    assert tema.fuentes(12)["total"][0] == tema.FAMILIA
+    interfaz.preparar_estilo(cfg.CONFIG_POR_DEFECTO)  # deja el estilo por defecto para las demás pruebas
+    assert tema.PIXEL
+
+
+def test_estilo_pixel_usa_letra_pixelada_en_multiplos_de_8(root):
+    import tkinter.font as tkf
+    from cotizador import tema
+    interfaz.App(root, copy.deepcopy(cfg.CONFIG_POR_DEFECTO))
+    assert tema.FUENTE_PIXEL in tkf.families(root)
+    for clave in ("titulo", "seccion", "soltar", "total", "copias"):
+        familia, tamano = tema.fuentes(12, 1.25)[clave]
+        assert familia == tema.FUENTE_PIXEL and tamano < 0 and tamano % 8 == 0
+
+
+def test_pixelart_dibuja_logo_e_icono():
+    from cotizador import pixelart
+    assert pixelart.icono(32).size == (32, 32)
+    logo = pixelart.encabezado(2)
+    assert logo.height == 64 and logo.width > 300

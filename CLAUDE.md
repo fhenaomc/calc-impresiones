@@ -1,4 +1,4 @@
-# Cotizador de impresiones — papelería
+# Cotizador de impresiones — Net Papelería
 
 Programa de escritorio (Windows 10, en español) para cotizar impresiones en una
 **Ricoh MP C3003** (láser color CMYK). Lo usan los padres del autor, que no son
@@ -56,7 +56,9 @@ cotizador/interfaz.py    ventana principal (App) + VentanaDetalle; `python -m co
 cotizador/ventana_precios.py  editor de precios por rango (escribe config.json)
 cotizador/ventana_costos.py   "Costos del negocio": tóner, papel, mantenimiento, energía, avanzado;
                               resultado en vivo por rango (escribe config.json)
-cotizador/tema.py        colores, letras y tamaños de la interfaz (un solo lugar)
+cotizador/tema.py        estilos "pixel" (Net Papelería, por defecto) y "clasico": colores, letras, botones
+cotizador/pixelart.py    sprites en pixel art hechos con código: impresora, logo, ícono de ventana
+cotizador/recursos/      PressStart2P-Regular.ttf + licencia OFL (incluir en el .exe)
 cotizador/formato.py     pesos(), leer_pesos(), hojas()
 tests/                   pytest con imágenes sintéticas de cobertura conocida
 herramientas/generar_referencias.py   PDFs de referencia por rango (fotos de Windows)
@@ -114,3 +116,15 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
 - Pendiente de validar con los dueños: un afiche oscuro a página completa dio 78 % → "Color medio".
 - `App.modos` = {posición en trabajo: BN|COLOR}; se borra con cotización nueva, no al agregar archivos.
 - La ventana de detalle se refresca desde `App.recotizar()` (`App.detalle.refrescar`).
+
+## Estilo visual (oct. 2026)
+- Negocio: **Net Papelería** (sin logo formal; colores del pendón: fucsia, amarillo, rojo, blanco).
+- Estilo "pixel" por defecto; "clasico" como opción (`apariencia.tema` en config, o Costos → Avanzado).
+  El cambio de estilo/tamaño de letra se aplica al reabrir el programa.
+- **Legibilidad primero**: letra pixelada (Press Start 2P) solo en marco/logo, títulos, secciones,
+  zona de soltar, copias y total. Botones, tablas y textos de detalle en Segoe UI.
+- Press Start 2P solo es nítida en múltiplos de 8 px: tamaños en píxeles negativos (`tema._px8`).
+- La letra se carga solo para el proceso con `AddFontResourceExW(FR_PRIVATE)` ANTES de crear Tk
+  (`interfaz.preparar_estilo`). Si falla, se cae al estilo clásico. No tiene ✋ ⚠ −: no usarlos en pixel.
+- "Ricoh MP C3003" va como texto descriptivo; no copiar el logo de Ricoh (marca registrada).
+- PyInstaller: agregar `--add-data "cotizador/recursos;cotizador/recursos"`.

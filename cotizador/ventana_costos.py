@@ -92,12 +92,11 @@ class VentanaCostos(tk.Toplevel):
 
         botones = tk.Frame(self, bg=self.C["fondo"])
         botones.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-        b = dict(font=fuentes["boton"], relief="solid", bd=1, padx=12, pady=4, cursor="hand2")
-        tk.Button(botones, text="Guardar", command=self.guardar, bg=self.C["primario"],
-                  fg=self.C["primario_texto"], **b).pack(side="right")
-        tk.Button(botones, text="Cancelar", command=self.destroy, bg=self.C["panel"], **b).pack(side="right", padx=8)
+        tk.Button(botones, text="Guardar", command=self.guardar, **tema.estilo_boton(fuentes, principal=True)
+                  ).pack(side="right")
+        tk.Button(botones, text="Cancelar", command=self.destroy, **tema.estilo_boton(fuentes)).pack(side="right", padx=8)
         tk.Button(botones, text="Volver a los valores originales", command=self.restaurar,
-                  bg=self.C["panel"], **b).pack(side="left")
+                  **tema.estilo_boton(fuentes)).pack(side="left")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
         self._recalcular()
@@ -165,8 +164,7 @@ class VentanaCostos(tk.Toplevel):
                  ).pack(anchor="w")
         self.tabla_mant = tk.Frame(m, bg=self.C["fondo"])
         self.tabla_mant.pack(fill="x", pady=6)
-        tk.Button(m, text="+ Agregar repuesto o visita", font=self.F["boton"], relief="solid", bd=1,
-                  bg=self.C["panel"], fg=self.C["primario"], cursor="hand2",
+        tk.Button(m, text="+ Agregar repuesto o visita", **tema.estilo_boton(self.F),
                   command=lambda: self._agregar_mant({"nombre": "Nuevo", "costo": 0, "cada_hojas": 10000,
                                                       "solo_color": False})).pack(anchor="w")
         for item in config["mantenimiento"]:
@@ -239,6 +237,17 @@ class VentanaCostos(tk.Toplevel):
         self._campo(m, 3, 0, config, ("margen_pct",), "Margen si no hay precio fijo (%)", "uno",
                     minimo=0, minimo_exclusivo=False, maximo=99)
 
+        self._titulo(m, 7, "Apariencia")
+        tk.Label(m, text="Estilo", font=self.F["normal"], bg=self.C["fondo"], anchor="w").grid(row=8, column=0, sticky="w")
+        self.var_tema = tk.StringVar(value=config["apariencia"].get("tema", "pixel"))
+        opciones = tk.Frame(m, bg=self.C["fondo"])
+        opciones.grid(row=8, column=1, columnspan=2, sticky="w")
+        for texto, valor in (("Pixel (Net Papelería)", "pixel"), ("Clásico", "clasico")):
+            tk.Radiobutton(opciones, text=texto, value=valor, variable=self.var_tema, font=self.F["normal"],
+                           bg=self.C["fondo"]).pack(side="left", padx=(0, 8))
+        self._campo(m, 9, 0, config, ("apariencia", "tamano_letra"), "Tamaño de letra", "entero",
+                    "normal: 12", minimo=8, minimo_exclusivo=False, maximo=20)
+
         self._titulo(m, 4, "Detección de color")
         self._campo(m, 5, 0, config, ("analisis", "umbral_croma_decision"), "Intensidad mínima del color",
                     "decimal", "0 a 1; más alto = más estricto", minimo=0, maximo=1)
@@ -271,6 +280,8 @@ class VentanaCostos(tk.Toplevel):
                 raise ValueError(f"«{c.etiqueta}» no puede pasar de {numero(c.maximo)}")
             _poner(nuevo, c.ruta, valor if con_decimales else int(valor))
 
+        if hasattr(self, "var_tema"):
+            nuevo["apariencia"]["tema"] = self.var_tema.get()
         nuevo["mantenimiento"] = []
         for fila in self.filas_mant:
             nombre = fila["nombre"].get().strip() or "Sin nombre"
@@ -359,6 +370,8 @@ class VentanaCostos(tk.Toplevel):
                 c.var.set(_mostrar(_obtener(defecto, c.ruta), c.tipo))
             except (KeyError, IndexError):
                 pass  # un rango que no existe en los valores de fábrica
+        if hasattr(self, "var_tema"):
+            self.var_tema.set(defecto["apariencia"]["tema"])
         self.filas_mant = []
         for item in defecto["mantenimiento"]:
             self._agregar_mant(item, redibujar=False)

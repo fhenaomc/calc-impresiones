@@ -70,12 +70,11 @@ class VentanaPrecios(tk.Toplevel):
 
         botones = tk.Frame(self, bg=C["fondo"])
         botones.grid(row=fila, column=0, columnspan=4, sticky="ew", pady=(14, 0))
-        estilo = dict(font=fuentes["boton"], relief="solid", bd=1, padx=12, pady=4, cursor="hand2")
-        tk.Button(botones, text="Guardar", command=self.guardar, bg=C["primario"], fg=C["primario_texto"],
-                  **estilo).pack(side="right")
-        tk.Button(botones, text="Cancelar", command=self.destroy, bg=C["panel"], **estilo).pack(side="right", padx=8)
+        tk.Button(botones, text="Guardar", command=self.guardar, **tema.estilo_boton(fuentes, principal=True)
+                  ).pack(side="right")
+        tk.Button(botones, text="Cancelar", command=self.destroy, **tema.estilo_boton(fuentes)).pack(side="right", padx=8)
         tk.Button(botones, text="Volver a los precios originales", command=self.restaurar,
-                  bg=C["panel"], **estilo).pack(side="left")
+                  **tema.estilo_boton(fuentes)).pack(side="left")
         self._sincronizar_oficio()
 
     # ------------------------------------------------------------------
