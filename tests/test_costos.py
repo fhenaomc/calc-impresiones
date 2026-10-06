@@ -6,7 +6,7 @@ import pytest
 
 from cotizador.cobertura import CoberturaPagina
 from cotizador.config import CONFIG_POR_DEFECTO
-from cotizador.costos import a_precio, area_relativa, costo_por_pct, cotizar, tabla_rangos
+from cotizador.costos import BN, COLOR, a_precio, area_relativa, costo_por_pct, cotizar, tabla_rangos
 
 
 @pytest.fixture
@@ -20,7 +20,9 @@ def config():
 
 def pagina(c=0, m=0, y=0, k=0, es_color=None):
     color = es_color if es_color is not None else (c + m + y) > 0
-    return CoberturaPagina(c, m, y, k, area_color_pct=10 if color else 0, es_color=color)
+    # k_gris aproximado: el negro más el promedio de los colores pasados a gris
+    return CoberturaPagina(c, m, y, k, area_color_pct=10 if color else 0, es_color=color,
+                           k_gris=k + (c + m + y) / 3)
 
 
 def test_costo_por_pct(config):
@@ -93,3 +95,21 @@ def test_alerta_si_el_toner_sube_mucho(config):
     config["rangos_color"][0]["precio_manual"] = {"carta": 1000}
     config["toner"]["C"]["precio"] = 5_000_000  # tóner 25 veces más caro
     assert tabla_rangos(config, "carta", es_color=True)[0]["bajo_costo"]
+
+
+def test_forzar_bn_cobra_como_bn_con_su_tinta_en_gris(config):
+    foto = pagina(c=40, m=30, y=30, k=20)  # k_gris = 20 + 100/3 ≈ 53 %
+    p = cotizar(config, [foto], modos={0: BN}).paginas[0]
+    assert not p.es_color and p.sugerido_color and p.forzado == BN
+    assert p.cobertura.c == 0 and p.cobertura.k == pytest.approx(53.33, abs=0.01)
+    assert p.rango == "B/N total"  # 53 % de negro: pasa de "cargado" (40 %)
+
+
+def test_forzar_color_en_hoja_gris(config):
+    p = cotizar(config, [pagina(k=5)], modos={0: COLOR}).paginas[0]
+    assert p.es_color and p.rango == "Color mínimo"
+
+
+def test_todo_bn_manda_sobre_los_modos(config):
+    cot = cotizar(config, [pagina(c=40, m=30, y=30), pagina(k=5)], modos={0: COLOR, 1: COLOR}, todo_bn=True)
+    assert not any(p.es_color for p in cot.paginas)

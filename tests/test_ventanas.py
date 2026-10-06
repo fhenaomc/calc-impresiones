@@ -119,3 +119,49 @@ def test_alerta_aparece_si_precio_bajo_costo(root):
     app = interfaz.App(root, config)
     assert app.alerta.winfo_manager() == "pack"
     assert "Color total" in app.alerta.cget("text")
+
+
+def _app_con_foto_y_texto(root, tmp_path):
+    """App con 2 hojas: una foto a color y una hoja de texto gris."""
+    from cotizador.cobertura import analizar_archivo
+    foto = np.full((1100, 850, 3), 255, np.uint8)
+    foto[:550] = (0, 128, 255)
+    texto = np.full((1100, 850, 3), 255, np.uint8)
+    texto[100:1000:20, 80:770] = 0
+    rutas = []
+    for nombre, img in (("foto.png", foto), ("texto.png", texto)):
+        Image.fromarray(img).save(tmp_path / nombre)
+        rutas.append(tmp_path / nombre)
+    app = interfaz.App(root, copy.deepcopy(cfg.CONFIG_POR_DEFECTO))
+    for r in rutas:
+        app.trabajo += [(r, i, c) for i, c in enumerate(analizar_archivo(r, app.config["analisis"]))]
+    app.recotizar()
+    return app
+
+
+def test_detalle_cambia_hoja_a_bn_y_actualiza_total(root, tmp_path):
+    from cotizador.costos import BN
+    app = _app_con_foto_y_texto(root, tmp_path)
+    antes = app.cotizacion.total
+    assert app.cotizacion.paginas[0].es_color
+    app.abrir_detalle()
+    det = app.detalle
+    det.lista.selection_set(det.lista.get_children()[0])
+    det._cambiar(BN)
+    assert not app.cotizacion.paginas[0].es_color
+    assert app.cotizacion.total < antes
+    valores = det.lista.item(det.lista.get_children()[0], "values")  # [archivo, hoja, imprimir, ...]
+    assert valores[2].startswith("✋")
+    det._cambiar(None)  # volver a la sugerencia
+    assert app.cotizacion.total == antes
+    det.destroy()
+    assert app.detalle is None
+
+
+def test_todo_bn_y_nueva_cotizacion_reinicia(root, tmp_path):
+    app = _app_con_foto_y_texto(root, tmp_path)
+    app.todo_bn.set(True)
+    app.recotizar()
+    assert not any(p.es_color for p in app.cotizacion.paginas)
+    app.limpiar()
+    assert not app.todo_bn.get() and app.modos == {} and app.cotizacion is None

@@ -43,8 +43,12 @@ CONFIG_POR_DEFECTO = {
     # --- Análisis de imagen ------------------------------------------------
     "analisis": {
         "dpi": 75,                    # resolución para renderizar páginas
-        "umbral_croma": 0.10,         # 0-1: diferencia mínima entre R,G,B para que un píxel "tenga color"
-        "area_min_color_pct": 0.05,   # % de la hoja con color para considerarla página a color
+        "umbral_croma": 0.10,         # 0-1: diferencia entre R,G,B para calcular tinta de color en un píxel
+        # Decisión "¿hoja a color?": solo cuentan MANCHAS de color intenso. Calibrado (oct. 2026):
+        # escaneo con celular ≤ 0,004 %, puntico naranja del logo IAC 0,005 %, logos EDAFA 0,22 %.
+        "umbral_croma_decision": 0.15,
+        "radio_mancha_px": 1,         # la mancha debe medir al menos (2·radio+1)² píxeles (3×3 ≈ 1 mm)
+        "area_min_color_pct": 0.02,   # % de la hoja con manchas de color para sugerir color (≈ 3,5 × 3,5 mm)
         "gcr": 0.5,                   # 0-1: cuánto de la mezcla CMY se reemplaza por K en píxeles de color
     },
 

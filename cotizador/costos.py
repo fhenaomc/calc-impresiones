@@ -86,25 +86,40 @@ def tabla_rangos(config: dict, tamano: str, es_color: bool) -> list[dict]:
     return tabla
 
 
+# Cómo imprimir una hoja: None = lo que sugiere el análisis; "bn" o "color" = decisión del usuario.
+BN, COLOR = "bn", "color"
+
+
 @dataclass
 class CotizacionPagina:
     numero: int
-    cobertura: CoberturaPagina
+    cobertura: CoberturaPagina  # cobertura con la que se cobra (ya en B/N o a color)
     costo: float           # costo real estimado (tinta + papel + desgaste)
     rango: str
     precio: int            # precio cobrado (el del rango)
     fuera_de_tabla: bool   # la página superó el último rango: se cobra su precio calculado
+    sugerido_color: bool = False  # lo que sugirió el análisis automático
+    forzado: str | None = None    # BN / COLOR si el usuario cambió la sugerencia
+
+    @property
+    def es_color(self) -> bool:
+        return self.cobertura.es_color
 
 
-def cotizar_pagina(config: dict, cob: CoberturaPagina, tamano: str, numero: int) -> CotizacionPagina:
-    costo = costo_tinta(config, cob, tamano) + costo_fijo(config, tamano, cob.es_color)
-    tabla = tabla_rangos(config, tamano, cob.es_color)
+def cotizar_pagina(config: dict, cob: CoberturaPagina, tamano: str, numero: int,
+                   forzar: str | None = None) -> CotizacionPagina:
+    usar_color = cob.es_color if forzar is None else forzar == COLOR
+    # Impresa en B/N, la impresora pasa TODO a gris: se cobra con el tóner negro equivalente.
+    efectiva = cob.como_color() if usar_color else cob.como_bn()
+    costo = costo_tinta(config, efectiva, tamano) + costo_fijo(config, tamano, usar_color)
+    tabla = tabla_rangos(config, tamano, usar_color)
+    extra = dict(sugerido_color=cob.es_color, forzado=forzar)
     for r in tabla:
-        if cob.total <= r["cobertura_max_pct"]:
-            return CotizacionPagina(numero, cob, costo, r["nombre"], r["precio"], False)
+        if efectiva.total <= r["cobertura_max_pct"]:
+            return CotizacionPagina(numero, efectiva, costo, r["nombre"], r["precio"], False, **extra)
     ultimo = tabla[-1]
     precio = max(ultimo["precio"], a_precio(config, costo))
-    return CotizacionPagina(numero, cob, costo, ultimo["nombre"] + " (+)", precio, True)
+    return CotizacionPagina(numero, efectiva, costo, ultimo["nombre"] + " (+)", precio, True, **extra)
 
 
 @dataclass
@@ -132,6 +147,11 @@ class Cotizacion:
         return self.total_por_copia * self.copias
 
 
-def cotizar(config: dict, coberturas: list[CoberturaPagina], tamano: str = "carta", copias: int = 1) -> Cotizacion:
-    paginas = [cotizar_pagina(config, cob, tamano, i + 1) for i, cob in enumerate(coberturas)]
+def cotizar(config: dict, coberturas: list[CoberturaPagina], tamano: str = "carta", copias: int = 1,
+            modos: dict[int, str] | None = None, todo_bn: bool = False) -> Cotizacion:
+    """modos: {índice de hoja: BN o COLOR} para las hojas que el usuario cambió.
+    todo_bn: el cliente pidió todo el trabajo en blanco y negro (manda sobre modos)."""
+    modos = modos or {}
+    paginas = [cotizar_pagina(config, cob, tamano, i + 1, BN if todo_bn else modos.get(i))
+               for i, cob in enumerate(coberturas)]
     return Cotizacion(paginas, copias, tamano)

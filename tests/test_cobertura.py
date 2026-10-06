@@ -72,3 +72,25 @@ def test_gcr_deja_mas_tinta_de_color_en_colores_oscuros():
     kmin = 1 - 80 / 255  # min(C,M,Y) = C en este color
     assert cob.k == pytest.approx(50 * kmin, abs=0.1)
     assert cob.c == pytest.approx(100 * (c0 - 0.5 * kmin), abs=0.1)
+
+
+def test_halo_de_color_de_escaneo_no_es_color():
+    """Escaneo con celular: letras negras con un borde de color pálido de 1 píxel."""
+    img = hoja()
+    for fila in range(100, 1000, 20):          # 45 renglones de "texto"
+        img[fila:fila + 6, 80:770] = NEGRO
+        img[fila - 1, 80:770] = (235, 200, 215)  # halo rosado arriba (croma ≈ 0,14)
+        img[fila + 6, 80:770] = (190, 230, 200)  # halo verdoso abajo (croma ≈ 0,16)
+    cob = analizar_imagen(img, ANALISIS)
+    assert not cob.es_color
+
+
+def test_puntico_de_color_diminuto_no_es_color():
+    img = hoja()
+    img[50:56, 50:56] = (255, 120, 0)  # punto naranja de 6×6 px (~2 mm)
+    assert not analizar_imagen(img, ANALISIS).es_color
+
+
+def test_k_gris_de_una_foto():
+    cob = analizar_imagen(hoja((255, 0, 0)), ANALISIS)  # rojo puro: gris = 1 - 1/3
+    assert cob.k_gris == pytest.approx(100 * 2 / 3, abs=0.1)

@@ -28,13 +28,22 @@ class CoberturaPagina:
     m: float
     y: float
     k: float
-    area_color_pct: float  # % de la hoja con píxeles de color
-    es_color: bool
+    area_color_pct: float  # % de la hoja con manchas de color "real" (ver analizar_imagen)
+    es_color: bool         # sugerencia automática: ¿vale la pena imprimirla a color?
+    k_gris: float = 0.0    # % de tóner negro si la hoja se imprime en B/N (todo pasado a gris)
 
     @property
     def total(self) -> float:
-        """Suma C+M+Y+K (puede pasar de 100 %, hasta 400 %)."""
+        """Suma C+M+Y+K impresa a color (puede pasar de 100 %, hasta 400 %)."""
         return self.c + self.m + self.y + self.k
+
+    def como_bn(self) -> "CoberturaPagina":
+        """La misma hoja impresa en blanco y negro: solo tóner K."""
+        return CoberturaPagina(0.0, 0.0, 0.0, self.k_gris, 0.0, False, self.k_gris)
+
+    def como_color(self) -> "CoberturaPagina":
+        """La misma hoja impresa a color (aunque la sugerencia fuera B/N)."""
+        return CoberturaPagina(self.c, self.m, self.y, self.k, self.area_color_pct, True, self.k_gris)
 
 
 def rgb_a_cmyk(rgb: np.ndarray, umbral_croma: float, gcr: float):
@@ -66,10 +75,37 @@ def rgb_a_cmyk(rgb: np.ndarray, umbral_croma: float, gcr: float):
     return c, m, y, k, es_color
 
 
+def erosionar(mascara: np.ndarray, radio: int) -> np.ndarray:
+    """Erosión: un píxel queda en True solo si todo su vecindario (2·radio+1)² también lo es.
+
+    Borra detalles más delgados que el vecindario (los halos de color de 1-2 píxeles
+    que deja un escaneo con celular alrededor de las letras) y conserva las manchas
+    (logos, fotos, títulos). Se hace con rebanadas de numpy, sin bucles por píxel.
+    """
+    if radio <= 0:
+        return mascara
+    alto, ancho = mascara.shape
+    borde = np.pad(mascara, radio, constant_values=False)
+    salida = np.ones_like(mascara)
+    for dy in range(2 * radio + 1):
+        for dx in range(2 * radio + 1):
+            salida &= borde[dy:dy + alto, dx:dx + ancho]
+    return salida
+
+
 def analizar_imagen(rgb: np.ndarray, analisis: dict) -> CoberturaPagina:
-    """Cobertura de una página ya convertida a RGB."""
-    c, m, y, k, es_color = rgb_a_cmyk(rgb, analisis["umbral_croma"], analisis["gcr"])
-    area_color = float(es_color.mean() * 100)
+    """Cobertura de una página ya convertida a RGB.
+
+    Dos preguntas distintas, con criterios distintos:
+      1. ¿Cuánta tinta gasta?  -> rgb_a_cmyk con un umbral de croma bajo (conservador).
+      2. ¿Es una hoja a color? -> solo cuentan manchas de color intenso (croma alto +
+         erosión), para ignorar el "ruido" de color de escaneos y fotos de documentos.
+    """
+    c, m, y, k, _ = rgb_a_cmyk(rgb, analisis["umbral_croma"], analisis["gcr"])
+    x = rgb.astype(np.float32) / 255.0
+    croma = x.max(axis=2) - x.min(axis=2)
+    manchas = erosionar(croma >= analisis["umbral_croma_decision"], analisis["radio_mancha_px"])
+    area_color = float(manchas.mean() * 100)
     return CoberturaPagina(
         c=float(c.mean() * 100),
         m=float(m.mean() * 100),
@@ -77,6 +113,7 @@ def analizar_imagen(rgb: np.ndarray, analisis: dict) -> CoberturaPagina:
         k=float(k.mean() * 100),
         area_color_pct=area_color,
         es_color=area_color >= analisis["area_min_color_pct"],
+        k_gris=float((1.0 - x.mean(axis=2)).mean() * 100),
     )
 
 

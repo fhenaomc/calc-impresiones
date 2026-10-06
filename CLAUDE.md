@@ -10,7 +10,12 @@ aprendiendo programación: **explicar las decisiones y el código**, no solo ent
 - **Tarifa fija por rango** (no precio exacto). Rangos b/n: normal / cargado / total.
   Rangos color: mínimo (b/n con título o logo a color) / medio (foto de ½ página) /
   alto (dos fotos) / total (foto a página completa).
-- Cualquier color apreciable (≥ 0,05 % del área) vuelve la página "color".
+- Detección automática de color: solo cuentan MANCHAS de color intenso (croma ≥ 0,15 y
+  erosión 3×3) que sumen ≥ 0,02 % de la hoja (≈ 3,5 × 3,5 mm). Así un escaneo con celular
+  (halos de color en las letras) y el puntico naranja del logo IAC quedan en B/N.
+- **La decisión final es del usuario**: en el detalle cada hoja puede pasarse a B/N o color
+  (✋ = decidido a mano), y en la ventana principal "Todo en blanco y negro" manda sobre todo.
+  Una hoja impresa en B/N se cobra con `k_gris` (toda la hoja pasada a gris), no con su K a color.
 - Una página b/n muy cargada cuesta más que una normal.
 - **Siempre estimar por encima**: redondeo hacia arriba, factor de corrección > 1,
   precio del rango calculado en su límite superior con el tóner más caro.
@@ -96,3 +101,5 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
 - Capturas para revisar la interfaz: usar `PrintWindow` (solo la ventana), nunca capturar la
   pantalla: puede incluir otras ventanas del usuario (correo, etc.).
 - Pendiente de validar con los dueños: un afiche oscuro a página completa dio 78 % → "Color medio".
+- `App.modos` = {posición en trabajo: BN|COLOR}; se borra con cotización nueva, no al agregar archivos.
+- La ventana de detalle se refresca desde `App.recotizar()` (`App.detalle.refrescar`).

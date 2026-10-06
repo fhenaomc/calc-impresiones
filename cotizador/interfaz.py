@@ -27,7 +27,7 @@ from PIL import ImageTk
 from . import config as cfg
 from . import tema
 from .cobertura import EXTENSIONES_IMAGEN, EXTENSIONES_PDF, analizar_archivo, imagen_pagina
-from .costos import cotizar, tabla_rangos
+from .costos import BN, COLOR, cotizar, tabla_rangos
 from .formato import hojas, pesos
 
 try:  # arrastrar y soltar; si la librería faltara, el programa funciona solo con clic
@@ -44,11 +44,14 @@ class App:
         self.root = root
         self.config = config
         self.trabajo = []        # [(ruta, índice de página, CoberturaPagina), ...]
+        self.modos = {}          # {posición en trabajo: BN o COLOR} hojas cambiadas a mano en el detalle
         self.cotizacion = None
+        self.detalle = None      # ventana de detalle abierta (para refrescarla)
         self.ocupado = False
         self.cola = queue.Queue()
         self.tamano = tk.StringVar(value="carta")
         self.copias = tk.IntVar(value=1)
+        self.todo_bn = tk.BooleanVar(value=False)
 
         self.C = tema.COLORES
         self.F = tema.fuentes(config["apariencia"]["tamano_letra"])
@@ -118,6 +121,15 @@ class App:
         self._boton(opc, "−", lambda: self.cambiar_copias(-1), width=2).pack(side="right")
         tk.Label(opc, text="Copias:", font=F["negrita"], bg=C["fondo"], fg=C["texto"]).pack(side="right", padx=6)
 
+        # --- Impresión: lo que sugiere el programa, o todo en B/N si el cliente lo pide
+        imp = tk.Frame(marco, bg=C["fondo"])
+        imp.pack(fill="x", pady=(0, 12))
+        tk.Label(imp, text="Imprimir:", font=F["negrita"], bg=C["fondo"], fg=C["texto"]).pack(side="left")
+        for texto, valor in (("Como sugiere el programa", False), ("Todo en blanco y negro", True)):
+            tk.Radiobutton(imp, text=texto, value=valor, variable=self.todo_bn, indicatoron=0,
+                           font=F["boton"], pady=4, padx=10, bg=C["panel"], selectcolor=C["zona_activa"],
+                           cursor="hand2", command=self.recotizar).pack(side="left", padx=4)
+
         # --- Resumen
         panel = tk.Frame(marco, bg=C["panel"], relief="solid", bd=1, padx=14, pady=10)
         panel.pack(fill="both", expand=True)
@@ -179,7 +191,8 @@ class App:
         if not validas:
             return
         if not agregar:
-            self.trabajo = []
+            self.trabajo, self.modos = [], {}
+            self.todo_bn.set(False)
         self.ocupado = True
         self.progreso.pack(fill="x", pady=(4, 0), after=self.estado.master)
         threading.Thread(target=self._analizar, args=(validas, dict(self.config["analisis"])), daemon=True).start()
@@ -227,8 +240,11 @@ class App:
     def limpiar(self):
         if self.ocupado:
             return
-        self.trabajo = []
+        self.trabajo, self.modos = [], {}
         self.copias.set(1)
+        self.todo_bn.set(False)
+        if self.detalle is not None:
+            self.detalle.destroy()
         self.recotizar()
 
     def recotizar(self):
@@ -248,7 +264,8 @@ class App:
             return
 
         coberturas = [c for _, _, c in self.trabajo]
-        self.cotizacion = cot = cotizar(self.config, coberturas, self.tamano.get(), self.copias.get())
+        self.cotizacion = cot = cotizar(self.config, coberturas, self.tamano.get(), self.copias.get(),
+                                        modos=self.modos, todo_bn=self.todo_bn.get())
 
         archivos = list(dict.fromkeys(r for r, _, _ in self.trabajo))  # sin repetir, en orden
         nombre = archivos[0].name if len(archivos) == 1 else f"{len(archivos)} archivos"
@@ -270,11 +287,18 @@ class App:
                 tk.Label(self.resumen, text=texto, font=F["negrita"] if j == 2 else F["normal"],
                          bg=C["panel"], fg=C["texto"], anchor=lado).grid(row=i, column=j, sticky="ew", padx=6)
         self.resumen.grid_columnconfigure(2, weight=1)
+        cambiadas = sum(1 for p in cot.paginas if p.forzado and p.es_color != p.sugerido_color)
+        if cambiadas and not self.todo_bn.get():
+            tk.Label(self.resumen, text=f"✋ {hojas(cambiadas)} {'cambiada' if cambiadas == 1 else 'cambiadas'} a mano en el detalle",
+                     font=F["pequena"], bg=C["panel"], fg=C["texto_suave"]
+                     ).grid(row=len(filas), column=0, columnspan=6, sticky="w", pady=(6, 0))
 
         copias = "1 copia" if cot.copias == 1 else f"{cot.copias} copias"
         self.etiqueta_total.config(text=f"Total ({copias})")
         self.total.config(text=pesos(cot.total))
         self.boton_detalle.config(state="normal")
+        if self.detalle is not None:
+            self.detalle.refrescar(cot)
 
     # ------------------------------------------------------------------ ventanas
     def actualizar_config(self, config):
@@ -295,69 +319,148 @@ class App:
         VentanaPrecios(self.root, self.config, self.F, al_guardar=self.actualizar_config)
 
     def abrir_detalle(self):
-        if self.cotizacion:
-            VentanaDetalle(self.root, self.trabajo, self.cotizacion, self.F)
+        if not self.cotizacion:
+            return
+        if self.detalle is not None:  # ya abierta: traerla al frente
+            self.detalle.lift()
+            return
+        self.detalle = VentanaDetalle(self.root, self, self.F)
+
+    def cambiar_modo(self, posiciones, modo):
+        """Desde el detalle: modo = BN, COLOR o None (volver a la sugerencia)."""
+        for i in posiciones:
+            if modo is None:
+                self.modos.pop(i, None)
+            else:
+                self.modos[i] = modo
+        self.recotizar()
 
 
 class VentanaDetalle(tk.Toplevel):
-    """Lista de hojas con su rango y precio; al elegir una se ve la página."""
+    """Lista de hojas con rango y precio. Permite decidir B/N o color hoja por hoja
+    (se pueden elegir varias con Shift o Ctrl) y muestra la página elegida."""
 
     ANCHO_VISTA = 340
 
-    def __init__(self, padre, trabajo, cotizacion, fuentes):
+    def __init__(self, padre, app, fuentes):
         super().__init__(padre)
         self.title("Detalle hoja por hoja")
-        self.configure(bg=tema.COLORES["fondo"], padx=12, pady=12)
-        self.trabajo = trabajo
+        C = tema.COLORES
+        self.configure(bg=C["fondo"], padx=12, pady=12)
+        self.app = app
         self._foto = None  # hay que guardar la referencia o Python borra la imagen
 
         estilo = ttk.Style(self)
         estilo.configure("Detalle.Treeview", font=fuentes["normal"], rowheight=int(fuentes["normal"][1] * 2.3))
         estilo.configure("Detalle.Treeview.Heading", font=fuentes["negrita"])
 
-        varios = len({r for r, _, _ in trabajo}) > 1
-        columnas = (["archivo"] if varios else []) + ["hoja", "rango", "precio", "tinta"]
-        titulos = {"archivo": "Archivo", "hoja": "Hoja", "rango": "Rango", "precio": "Precio", "tinta": "Tinta"}
-        anchos = {"archivo": 260, "hoja": 60, "rango": 160, "precio": 90, "tinta": 70}
+        trabajo = app.trabajo
+        self.varios = len({r for r, _, _ in trabajo}) > 1
+        columnas = (["archivo"] if self.varios else []) + ["hoja", "imprimir", "rango", "precio", "tinta"]
+        titulos = {"archivo": "Archivo", "hoja": "Hoja", "imprimir": "Imprimir en", "rango": "Rango",
+                   "precio": "Precio", "tinta": "Tinta"}
+        anchos = {"archivo": 260, "hoja": 60, "imprimir": 170, "rango": 160, "precio": 90, "tinta": 70}
 
-        izq = tk.Frame(self, bg=tema.COLORES["fondo"])
+        izq = tk.Frame(self, bg=C["fondo"])
         izq.pack(side="left", fill="both", expand=True)
-        tk.Label(izq, text="«Tinta» = cuánto de la hoja cubre el tóner, sumando los 4 colores.",
-                 font=fuentes["pequena"], bg=tema.COLORES["fondo"], fg=tema.COLORES["texto_suave"]
+
+        # --- Botones para cambiar B/N / color de las hojas seleccionadas
+        botones = tk.Frame(izq, bg=C["fondo"])
+        botones.pack(side="top", fill="x", pady=(0, 8))
+        tk.Label(botones, text="Hojas seleccionadas:", font=fuentes["negrita"], bg=C["fondo"]).pack(side="left")
+        estilo_b = dict(font=fuentes["boton"], relief="solid", bd=1, padx=10, pady=3, cursor="hand2",
+                        bg=C["panel"], fg=C["primario"])
+        tk.Button(botones, text="Blanco y negro", command=lambda: self._cambiar(BN), **estilo_b
+                  ).pack(side="left", padx=4)
+        tk.Button(botones, text="Color", command=lambda: self._cambiar(COLOR), **estilo_b
+                  ).pack(side="left", padx=4)
+        tk.Button(botones, text="Lo que sugiere el programa", command=lambda: self._cambiar(None),
+                  **estilo_b).pack(side="left", padx=4)
+        self.aviso = tk.Label(izq, font=fuentes["pequena"], bg=C["fondo"], fg=C["alerta_texto"], anchor="w",
+                              text="Está marcado «Todo en blanco y negro» en la ventana principal.")
+        self._despues_de_botones = botones
+
+        tk.Label(izq, text="Seleccione varias hojas con Shift o Ctrl. Doble clic cambia entre B/N y color.\n"
+                           "«Tinta» = cuánto de la hoja cubre el tóner.   ✋ = decidido a mano.",
+                 font=fuentes["pequena"], bg=C["fondo"], fg=C["texto_suave"], justify="left"
                  ).pack(side="bottom", anchor="w", pady=(6, 0))
-        izq = tk.Frame(izq, bg=tema.COLORES["fondo"])  # marco interno: lista + barra lado a lado
-        izq.pack(side="top", fill="both", expand=True)
-        self.lista = ttk.Treeview(izq, columns=columnas, show="headings", style="Detalle.Treeview", height=16)
+        self.total = tk.Label(izq, font=fuentes["negrita"], bg=C["fondo"], fg=C["total"], anchor="e")
+        self.total.pack(side="bottom", fill="x", pady=(6, 0))
+
+        marco_lista = tk.Frame(izq, bg=C["fondo"])  # lista + barra lado a lado
+        marco_lista.pack(side="top", fill="both", expand=True)
+        self.lista = ttk.Treeview(marco_lista, columns=columnas, show="headings", style="Detalle.Treeview",
+                                  height=16, selectmode="extended")
         for c in columnas:
             self.lista.heading(c, text=titulos[c])
-            self.lista.column(c, width=anchos[c], anchor="w" if c in ("archivo", "rango") else "center")
-        barra = ttk.Scrollbar(izq, orient="vertical", command=self.lista.yview)
+            self.lista.column(c, width=anchos[c], anchor="w" if c in ("archivo", "rango", "imprimir") else "center")
+        barra = ttk.Scrollbar(marco_lista, orient="vertical", command=self.lista.yview)
         self.lista.configure(yscrollcommand=barra.set)
         self.lista.pack(side="left", fill="both", expand=True)
         barra.pack(side="left", fill="y")
+        for _ in trabajo:
+            self.lista.insert("", "end")
 
-        for (ruta, indice, cob), p in zip(trabajo, cotizacion.paginas):
-            tag = p.rango
-            self.lista.tag_configure(tag, background=tema.color_rango(p.rango))
-            valores = ([ruta.name] if varios else []) + [indice + 1, p.rango, pesos(p.precio), f"{cob.total:.0f} %"]
-            self.lista.insert("", "end", values=valores, tags=(tag,))
-
-        self.vista = tk.Label(self, bg=tema.COLORES["panel"], relief="solid", bd=1,
-                              text="Elija una hoja\npara verla", font=fuentes["normal"],
-                              width=self.ANCHO_VISTA // 9, fg=tema.COLORES["texto_suave"])
+        self.vista = tk.Label(self, bg=C["panel"], relief="solid", bd=1, text="Elija una hoja\npara verla",
+                              font=fuentes["normal"], width=self.ANCHO_VISTA // 9, fg=C["texto_suave"])
         self.vista.pack(side="left", fill="y", padx=(12, 0))
 
         self.lista.bind("<<TreeviewSelect>>", self._mostrar)
-        primero = self.lista.get_children()
-        if primero:
-            self.lista.selection_set(primero[0])
+        self.lista.bind("<Double-1>", self._alternar)
+        filas = self.lista.get_children()
+        if filas:
+            self.lista.selection_set(filas[0])
+        self.refrescar(app.cotizacion)
+
+    def destroy(self):
+        self.app.detalle = None
+        super().destroy()
+
+    def refrescar(self, cotizacion):
+        """Actualiza los renglones (la ventana principal la llama cada vez que recotiza)."""
+        for item, (ruta, indice, _), p in zip(self.lista.get_children(), self.app.trabajo, cotizacion.paginas):
+            modo = "Color" if p.es_color else "Blanco y negro"
+            if p.forzado and p.es_color != p.sugerido_color:
+                modo = "✋ " + modo
+            self.lista.tag_configure(p.rango, background=tema.color_rango(p.rango))
+            valores = ([ruta.name] if self.varios else []) + [
+                indice + 1, modo, p.rango, pesos(p.precio), f"{p.cobertura.total:.0f} %"]
+            self.lista.item(item, values=valores, tags=(p.rango,))
+        copias = "" if cotizacion.copias == 1 else f" × {cotizacion.copias} copias"
+        self.total.config(text=f"Total: {pesos(cotizacion.total_por_copia)}{copias} = {pesos(cotizacion.total)}"
+                          if copias else f"Total: {pesos(cotizacion.total)}")
+        if self.app.todo_bn.get():
+            self.aviso.pack(side="top", anchor="w", after=self._despues_de_botones)
+        else:
+            self.aviso.pack_forget()
+        self._mostrar()
+
+    def _seleccion(self):
+        filas = self.lista.get_children()
+        return [filas.index(i) for i in self.lista.selection()]
+
+    def _cambiar(self, modo):
+        posiciones = self._seleccion()
+        if posiciones:
+            self.app.cambiar_modo(posiciones, modo)
+
+    def _alternar(self, evento):
+        item = self.lista.identify_row(evento.y)
+        if not item:
+            return
+        i = self.lista.get_children().index(item)
+        es_color = self.app.cotizacion.paginas[i].es_color
+        self.app.cambiar_modo([i], BN if es_color else COLOR)
 
     def _mostrar(self, _evento=None):
-        sel = self.lista.selection()
+        sel = self._seleccion()
         if not sel:
             return
-        ruta, indice, _ = self.trabajo[self.lista.index(sel[0])]
+        i = sel[-1]
+        ruta, indice, _ = self.app.trabajo[i]
         img = imagen_pagina(ruta, indice, dpi=50)
+        if not self.app.cotizacion.paginas[i].es_color:
+            img = img.convert("L")  # vista previa en gris: así se verá impresa
         img.thumbnail((self.ANCHO_VISTA, int(self.ANCHO_VISTA * 1.5)))
         self._foto = ImageTk.PhotoImage(img)
         self.vista.config(image=self._foto, text="", width=0)
