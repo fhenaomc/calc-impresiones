@@ -46,6 +46,10 @@ cotizador/config.py      valores por defecto + config.json (junto al .exe o raí
 cotizador/cobertura.py   archivo → páginas RGB (PyMuPDF / Pillow) → % CMYK
 cotizador/costos.py      modelo de costos, rangos, cotización y resumen
 cotizador/cli.py         prueba por consola
+cotizador/interfaz.py    ventana principal (App) + VentanaDetalle; `python -m cotizador`
+cotizador/ventana_precios.py  editor de precios por rango (escribe config.json)
+cotizador/tema.py        colores, letras y tamaños de la interfaz (un solo lugar)
+cotizador/formato.py     pesos(), leer_pesos(), hojas()
 tests/                   pytest con imágenes sintéticas de cobertura conocida
 herramientas/generar_referencias.py   PDFs de referencia por rango (fotos de Windows)
 herramientas/generar_tabla_precios.py documentos/Tabla de precios.xlsx (para aprobación de los dueños)
@@ -55,6 +59,7 @@ muestras/                archivos reales de prueba (NO se versionan: datos de cl
 ## Comandos
 ```
 .venv\Scripts\python -m pytest
+.venv\Scripts\pythonw -m cotizador          (abre la interfaz)
 .venv\Scripts\python -m cotizador.cli --rangos
 .venv\Scripts\python -m cotizador.cli muestras\archivo.pdf --detalle --tamano carta --copias 2
 .venv\Scripts\python herramientas\generar_referencias.py
@@ -74,8 +79,20 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
 ## Plan por etapas
 1. ✅ Motor de cobertura y costos con PDF e imágenes, probado con `muestras/`.
    ✅ Precios fijos por rango + tabla de precios en Excel para aprobación.
-2. ⬜ Interfaz tkinter + tkinterdnd2 (arrastrar y soltar, copias, tamaño, resumen, detalle).
+2. ✅ Interfaz tkinter + tkinterdnd2: soltar/clic, tamaño, copias, resumen, detalle con
+   vista previa, varios archivos ("+ Agregar otro archivo"), editor de precios, alerta bajo costo.
 3. ⬜ Word/Excel/PowerPoint → PDF vía Office (pywin32 COM); LibreOffice como alternativa;
    mensaje claro si ninguno está.
 4. ⬜ Pantalla de ajustes (todos los valores de config, incl. precio manual por rango).
 5. ⬜ .exe único con PyInstaller (incluir binarios de tkinterdnd2) + guía de calibración.
+
+## Notas de la interfaz
+- El análisis corre en un hilo; se comunica con la ventana por `queue.Queue` + `root.after`.
+  Solo el hilo principal toca widgets.
+- Se guarda la cobertura (`App.trabajo`), no el precio: tamaño/copias/precios recotizan sin reanalizar.
+- Soltar o clic = cotización nueva; "+ Agregar otro archivo" suma al trabajo actual.
+- Si tkinterdnd2 falla, el programa sigue con clic (`_activar_soltar` atrapa el error).
+- Pruebas de ventanas: UNA raíz Tk por sesión de pytest (crear muchas Tk() falla en Windows).
+- Capturas para revisar la interfaz: usar `PrintWindow` (solo la ventana), nunca capturar la
+  pantalla: puede incluir otras ventanas del usuario (correo, etc.).
+- Pendiente de validar con los dueños: un afiche oscuro a página completa dio 78 % → "Color medio".

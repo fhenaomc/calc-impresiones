@@ -12,11 +12,7 @@ from pathlib import Path
 from . import config as cfg
 from .cobertura import analizar_archivo
 from .costos import cotizar, tabla_rangos
-
-
-def pesos(valor: float) -> str:
-    """Formato colombiano: $1.250"""
-    return "$" + f"{valor:,.0f}".replace(",", ".")
+from .formato import pesos
 
 
 def mostrar_rangos(config: dict) -> None:

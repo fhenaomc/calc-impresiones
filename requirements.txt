@@ -1,6 +1,7 @@
 pymupdf
 pillow
 numpy
+tkinterdnd2
 openpyxl
 pywin32
 pytest

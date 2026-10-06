@@ -110,5 +110,36 @@ def paginas_rgb(ruta: Path, dpi: int):
         raise ValueError(f"Formato no soportado: {ext}")
 
 
-def analizar_archivo(ruta: Path, analisis: dict) -> list[CoberturaPagina]:
-    return [analizar_imagen(rgb, analisis) for rgb in paginas_rgb(Path(ruta), analisis["dpi"])]
+def contar_paginas(ruta: Path) -> int:
+    ext = Path(ruta).suffix.lower()
+    if ext in EXTENSIONES_PDF:
+        with pymupdf.open(ruta) as doc:
+            return doc.page_count
+    if ext in EXTENSIONES_IMAGEN:
+        with Image.open(ruta) as img:
+            return getattr(img, "n_frames", 1)
+    raise ValueError(f"Formato no soportado: {ext}")
+
+
+def analizar_archivo(ruta: Path, analisis: dict, progreso=None) -> list[CoberturaPagina]:
+    """Analiza todas las páginas. `progreso(i, total)` se llama después de cada página (opcional)."""
+    ruta = Path(ruta)
+    total = contar_paginas(ruta) if progreso else 0
+    resultado = []
+    for i, rgb in enumerate(paginas_rgb(ruta, analisis["dpi"]), start=1):
+        resultado.append(analizar_imagen(rgb, analisis))
+        if progreso:
+            progreso(i, total)
+    return resultado
+
+
+def imagen_pagina(ruta: Path, indice: int, dpi: int = 50) -> Image.Image:
+    """Imagen PIL de una página (índice desde 0), para mostrar una vista previa."""
+    ruta = Path(ruta)
+    if ruta.suffix.lower() in EXTENSIONES_PDF:
+        with pymupdf.open(ruta) as doc:
+            pix = doc[indice].get_pixmap(dpi=dpi, colorspace=pymupdf.csRGB, alpha=False)
+            return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    with Image.open(ruta) as img:
+        img.seek(indice)
+        return Image.fromarray(_imagen_pil_a_rgb(img))

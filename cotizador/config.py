@@ -48,6 +48,9 @@ CONFIG_POR_DEFECTO = {
         "gcr": 0.5,                   # 0-1: cuánto de la mezcla CMY se reemplaza por K en píxeles de color
     },
 
+    # --- Apariencia (colores y demás en cotizador/tema.py) ------------------
+    "apariencia": {"tamano_letra": 12},
+
     # --- Rangos (tarifa fija por rango) ------------------------------------
     # Cada rango cubre páginas hasta cierta cobertura total (suma C+M+Y+K, en %).
     # El precio del rango se calcula con el modelo de costos en su límite superior

@@ -1,0 +1,121 @@
+"""Pruebas de la interfaz: se crean las ventanas de verdad (sin mostrarlas) y se simula al usuario."""
+
+import copy
+import tkinter as tk
+from pathlib import Path
+
+import numpy as np
+import pytest
+from PIL import Image
+
+from cotizador import config as cfg
+from cotizador import interfaz, ventana_precios
+from cotizador.formato import leer_pesos
+
+
+@pytest.fixture(scope="session")
+def _tk():
+    # Una sola raíz Tk para todas las pruebas: crear y destruir muchas Tk() en un
+    # proceso falla de forma intermitente en Windows ("Can't find a usable tk.tcl").
+    r = tk.Tk()
+    r.withdraw()
+    yield r
+    r.destroy()
+
+
+@pytest.fixture
+def root(_tk):
+    """Ventana hija nueva para cada prueba; se destruye al terminar."""
+    w = tk.Toplevel(_tk)
+    w.withdraw()
+    yield w
+    w.destroy()
+
+
+@pytest.fixture
+def guardados(monkeypatch):
+    """Reemplaza cfg.guardar para no escribir config.json real; devuelve lo que se habría guardado."""
+    lista = []
+    monkeypatch.setattr(ventana_precios.cfg, "guardar", lambda c: lista.append(c))
+    return lista
+
+
+def ventana(root, config=None, al_guardar=None):
+    from cotizador import tema
+    return ventana_precios.VentanaPrecios(root, config or copy.deepcopy(cfg.CONFIG_POR_DEFECTO),
+                                          tema.fuentes(12), al_guardar or (lambda c: None))
+
+
+def test_leer_pesos():
+    assert leer_pesos("$1.500") == 1500
+    assert leer_pesos(" 700 ") == 700
+    with pytest.raises(ValueError):
+        leer_pesos("mil")
+
+
+def test_guardar_precio_nuevo(root, guardados):
+    v = ventana(root)
+    _, _, v_carta, *_ = v.entradas[4]   # índice 4 = Color medio (3 rangos b/n + 2.º de color)
+    v_carta.set("2.500")
+    v.guardar()
+    nuevo = guardados[0]
+    assert nuevo["rangos_color"][1]["precio_manual"] == {"carta": 2500, "oficio": 2500}  # oficio copia a carta
+
+
+def test_oficio_distinto(root, guardados):
+    v = ventana(root)
+    v.igual_oficio.set(False)
+    v._sincronizar_oficio()
+    _, _, _, v_oficio, *_ = v.entradas[0]
+    v_oficio.set("900")
+    v.guardar()
+    assert guardados[0]["rangos_bn"][0]["precio_manual"] == {"carta": 700, "oficio": 900}
+
+
+def test_precio_invalido_no_guarda(root, guardados, monkeypatch):
+    errores = []
+    monkeypatch.setattr(ventana_precios.messagebox, "showerror", lambda *a, **k: errores.append(a))
+    v = ventana(root)
+    v.entradas[0][2].set("abc")
+    v.guardar()
+    assert errores and not guardados
+
+
+def test_bajo_costo_pide_confirmacion(root, guardados, monkeypatch):
+    monkeypatch.setattr(ventana_precios.messagebox, "askyesno", lambda *a, **k: False)  # usuario dice "No"
+    v = ventana(root)
+    v.entradas[6][2].set("100")  # Color total a $100: por debajo del costo
+    v.guardar()
+    assert not guardados
+
+
+def test_restaurar_vuelve_a_los_originales(root):
+    v = ventana(root)
+    v.entradas[3][2].set("5000")
+    v.restaurar()
+    assert leer_pesos(v.entradas[3][2].get()) == 1000
+
+
+def test_app_cotiza_una_imagen(root, tmp_path):
+    """Flujo completo sin hilos: imagen -> análisis -> resumen en la ventana."""
+    img = np.full((1100, 850, 3), 255, np.uint8)
+    img[:550] = (0, 128, 255)  # media hoja azul -> color
+    ruta = tmp_path / "foto.png"
+    Image.fromarray(img).save(ruta)
+
+    app = interfaz.App(root, copy.deepcopy(cfg.CONFIG_POR_DEFECTO))
+    from cotizador.cobertura import analizar_archivo
+    app.trabajo = [(Path(ruta), i, c) for i, c in enumerate(analizar_archivo(ruta, app.config["analisis"]))]
+    app.copias.set(3)
+    app.recotizar()
+    assert app.cotizacion.paginas[0].rango.startswith("Color")
+    assert app.total.cget("text") == "$" + f"{app.cotizacion.paginas[0].precio * 3:,}".replace(",", ".")
+    assert "3 copias" in app.etiqueta_total.cget("text")
+
+
+def test_alerta_aparece_si_precio_bajo_costo(root):
+    config = copy.deepcopy(cfg.CONFIG_POR_DEFECTO)
+    config["rangos_color"][3]["precio_manual"] = {"carta": 100, "oficio": 100}
+    app = interfaz.App(root, config)
+    assert app.alerta.winfo_manager() == "pack"
+    assert "Color total" in app.alerta.cget("text")
