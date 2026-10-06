@@ -82,7 +82,8 @@ class App:
         enc.pack(fill="x")
         tk.Label(enc, text="Cotizador de impresiones", font=F["titulo"], fg=C["primario"],
                  bg=C["fondo"]).pack(side="left")
-        self._boton(enc, "Precios", self.abrir_precios).pack(side="right")
+        self._boton(enc, "Costos", self.abrir_costos).pack(side="right")
+        self._boton(enc, "Precios", self.abrir_precios).pack(side="right", padx=(8, 0))
         self._boton(enc, "Nueva cotización", self.limpiar).pack(side="right", padx=8)
 
         # --- Aviso (solo aparece si algún precio quedó por debajo del costo)
@@ -317,6 +318,10 @@ class App:
     def abrir_precios(self):
         from .ventana_precios import VentanaPrecios
         VentanaPrecios(self.root, self.config, self.F, al_guardar=self.actualizar_config)
+
+    def abrir_costos(self):
+        from .ventana_costos import VentanaCostos
+        VentanaCostos(self.root, self.config, self.F, al_guardar=self.actualizar_config)
 
     def abrir_detalle(self):
         if not self.cotizacion:

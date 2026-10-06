@@ -2,7 +2,7 @@
 
 Costo de una página:
     tinta_canal = (precio_tóner / rendimiento) × (cobertura_canal / 5 %) × área_relativa
-    costo       = Σ tinta_canal × factor_corrección + papel + desgaste
+    costo       = Σ tinta_canal × factor_corrección + papel + mantenimiento + energía
     precio      = costo / (1 − margen)   → redondeado hacia arriba
 
 Rangos: cada rango tiene un límite de cobertura total (C+M+Y+K). Una página cae
@@ -31,12 +31,32 @@ def costo_por_pct(config: dict, canal: str) -> float:
     return t["precio"] / t["rendimiento"] / config["cobertura_referencia_pct"]
 
 
-def costo_fijo(config: dict, tamano: str, es_color: bool) -> float:
-    """Papel + desgaste de una página."""
+def costo_papel(config: dict, tamano: str) -> float:
     p = config["papel"][tamano]
-    papel = p["precio_resma"] / p["hojas_resma"]
-    desgaste = config["desgaste_por_pagina"]["color" if es_color else "bn"]
-    return papel + desgaste
+    return p["precio_resma"] / p["hojas_resma"]
+
+
+def costo_mantenimiento(config: dict, es_color: bool) -> float:
+    """Pesos por hoja: cada repuesto o visita repartido entre las hojas de su ciclo."""
+    return sum(m["costo"] / m["cada_hojas"] for m in config["mantenimiento"]
+               if m["cada_hojas"] > 0 and (es_color or not m["solo_color"]))
+
+
+def energia_mes(config: dict) -> tuple[float, float]:
+    """(kWh al mes, pesos al mes) de la impresora."""
+    e = config["energia"]
+    kwh = e["potencia_w"] / 1000 * e["horas_dia"] * e["dias_mes"]
+    return kwh, kwh * e["precio_kwh"]
+
+
+def costo_energia(config: dict) -> float:
+    """Pesos por hoja: la energía del mes repartida entre las hojas del mes."""
+    return energia_mes(config)[1] / config["hojas_mes"] if config["hojas_mes"] > 0 else 0.0
+
+
+def costo_fijo(config: dict, tamano: str, es_color: bool) -> float:
+    """Lo que cuesta una hoja aparte de la tinta: papel + mantenimiento + energía."""
+    return costo_papel(config, tamano) + costo_mantenimiento(config, es_color) + costo_energia(config)
 
 
 def costo_tinta(config: dict, cob: CoberturaPagina, tamano: str) -> float:
@@ -94,7 +114,7 @@ BN, COLOR = "bn", "color"
 class CotizacionPagina:
     numero: int
     cobertura: CoberturaPagina  # cobertura con la que se cobra (ya en B/N o a color)
-    costo: float           # costo real estimado (tinta + papel + desgaste)
+    costo: float           # costo real estimado (tinta + papel + mantenimiento + energía)
     rango: str
     precio: int            # precio cobrado (el del rango)
     fuera_de_tabla: bool   # la página superó el último rango: se cobra su precio calculado

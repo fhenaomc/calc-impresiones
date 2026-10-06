@@ -165,3 +165,64 @@ def test_todo_bn_y_nueva_cotizacion_reinicia(root, tmp_path):
     assert not any(p.es_color for p in app.cotizacion.paginas)
     app.limpiar()
     assert not app.todo_bn.get() and app.modos == {} and app.cotizacion is None
+
+
+# ----------------------------------------------------------------------------- costos del negocio
+from cotizador import ventana_costos  # noqa: E402
+
+
+def costos(root, monkeypatch, guardados_costos):
+    from cotizador import tema
+    monkeypatch.setattr(ventana_costos.cfg, "guardar", lambda c: guardados_costos.append(c))
+    return ventana_costos.VentanaCostos(root, copy.deepcopy(cfg.CONFIG_POR_DEFECTO), tema.fuentes(12),
+                                        al_guardar=lambda c: None)
+
+
+def _campo(v, ruta):
+    return next(c for c in v.campos if c.ruta == ruta)
+
+
+def test_costos_lee_lo_mismo_que_la_config(root, monkeypatch):
+    v = costos(root, monkeypatch, [])
+    nuevo = v._leer()
+    base = cfg.CONFIG_POR_DEFECTO
+    assert nuevo["toner"] == base["toner"] and nuevo["energia"] == base["energia"]
+    assert nuevo["mantenimiento"] == base["mantenimiento"]
+    assert nuevo["factor_correccion"] == base["factor_correccion"]
+
+
+def test_papel_al_doble_sube_el_costo(root, monkeypatch):
+    from cotizador.costos import tabla_rangos
+    g = []
+    v = costos(root, monkeypatch, g)
+    antes = tabla_rangos(v._leer(), "carta", False)[0]["costo_limite"]
+    _campo(v, ("papel", "carta", "precio_resma")).var.set("$30.000")
+    v.guardar()
+    despues = tabla_rangos(g[0], "carta", False)[0]["costo_limite"]
+    assert despues == pytest.approx(antes + 30)  # papel de $30 a $60 por hoja
+
+
+def test_agregar_y_quitar_mantenimiento(root, monkeypatch):
+    g = []
+    v = costos(root, monkeypatch, g)
+    v._agregar_mant({"nombre": "Rodillos", "costo": 100000, "cada_hojas": 50000, "solo_color": False})
+    v._quitar_mant(v.filas_mant[0])  # quita la visita técnica
+    v.guardar()
+    nombres = [m["nombre"] for m in g[0]["mantenimiento"]]
+    assert "Rodillos" in nombres and "Visita técnica preventiva" not in nombres
+
+
+def test_dato_invalido_se_reporta_y_no_guarda(root, monkeypatch):
+    g, errores = [], []
+    monkeypatch.setattr(ventana_costos.messagebox, "showerror", lambda *a, **k: errores.append(a[1]))
+    v = costos(root, monkeypatch, g)
+    _campo(v, ("hojas_mes",)).var.set("0")
+    v.guardar()
+    assert not g and "Hojas impresas al mes" in errores[0]
+
+
+def test_limites_de_rangos_deben_crecer(root, monkeypatch):
+    v = costos(root, monkeypatch, [])
+    _campo(v, ("rangos_color", 1, "cobertura_max_pct")).var.set("10")  # medio < mínimo (20)
+    with pytest.raises(ValueError, match="menor a mayor"):
+        v._leer()

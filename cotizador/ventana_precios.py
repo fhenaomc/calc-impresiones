@@ -30,7 +30,7 @@ class VentanaPrecios(tk.Toplevel):
         tk.Label(self, text="Precios de venta por hoja", font=fuentes["titulo"], fg=C["primario"],
                  bg=C["fondo"]).grid(row=0, column=0, columnspan=4, sticky="w")
         tk.Label(self, text="Escriba el precio y presione Guardar. «Nos cuesta hasta» es lo máximo que puede\n"
-                            "costar una hoja de ese rango (tinta, papel y desgaste); el precio debe ser mayor.",
+                            "costar una hoja de ese rango (tinta, papel, mantenimiento y energía); el precio debe ser mayor.",
                  font=fuentes["pequena"], fg=C["texto_suave"], bg=C["fondo"], justify="left"
                  ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 10))
 

@@ -24,8 +24,7 @@ aprendiendo programación: **explicar las decisiones y el código**, no solo ent
   Oficio = mismo precio que carta. El modelo de costos se usa para clasificar y para
   alertar (`bajo_costo`) si un precio fijo deja de cubrir el costo máximo del rango.
 - Sin precio manual, el precio sale del modelo: `costo / (1 − 0,40)` redondeado arriba.
-- Reparto sugerido: (venta − tinta − papel) → 50 % capital (mantenimiento) / 50 % ganancia.
-  El desgaste no se resta aparte en ese reparto: lo cubre el capital.
+- Reparto sugerido: (venta − costo total) → `capital_pct` (50 %) ahorro e imprevistos / resto ganancia.
 - Un tamaño de papel por trabajo: **carta u oficio** (no se imprime doble carta). Sin doble cara.
 - Resultado: resumen agrupado ("8 pág. B/N normal × $700 …") + detalle por página.
 - Moneda: pesos colombianos, formato `$1.250`.
@@ -33,7 +32,9 @@ aprendiendo programación: **explicar las decisiones y el código**, no solo ent
 ## Modelo de costos (`cotizador/costos.py`)
 ```
 tinta_canal = (precio_tóner / rendimiento) × (cobertura_canal / 5 %) × área_relativa
-costo       = Σ tinta × factor_corrección + papel + desgaste(color|bn)
+costo       = Σ tinta × factor_corrección + papel + mantenimiento(color|bn) + energía
+mantenimiento = Σ costo/cada_hojas de cada repuesto (los `solo_color` solo en hojas a color)
+energía       = W/1000 × horas/día × días/mes × $/kWh ÷ hojas_mes
 precio      = ceil( costo / (1 − margen) / redondeo ) × redondeo
 ```
 Clasificación: la página cae en el primer rango con `cobertura_total (C+M+Y+K) ≤ límite`.
@@ -53,6 +54,8 @@ cotizador/costos.py      modelo de costos, rangos, cotización y resumen
 cotizador/cli.py         prueba por consola
 cotizador/interfaz.py    ventana principal (App) + VentanaDetalle; `python -m cotizador`
 cotizador/ventana_precios.py  editor de precios por rango (escribe config.json)
+cotizador/ventana_costos.py   "Costos del negocio": tóner, papel, mantenimiento, energía, avanzado;
+                              resultado en vivo por rango (escribe config.json)
 cotizador/tema.py        colores, letras y tamaños de la interfaz (un solo lugar)
 cotizador/formato.py     pesos(), leer_pesos(), hojas()
 tests/                   pytest con imágenes sintéticas de cobertura conocida
@@ -78,7 +81,11 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
 - Tóner C/M/Y: $200.000, rinde 17.000 pág. al 5 %. K: $180.000, 28.000 pág.
 - Papel: resma 500 hojas; carta $15.000, oficio $19.000.
 - Oficio 216 × 330 mm (confirmado como estimado válido).
-- PROVISIONAL: desgaste por página (color $40, b/n $20).
+- ESTIMADOS (confirmar con técnico / recibo / contador de la Ricoh):
+  mantenimiento (visita $180k c/30k hojas, fusor $1,2M c/120k, imagen negra $500k c/120k,
+  imagen CMY $1,5M c/120k solo color, banda $900k c/200k) ≈ $25/hoja B/N, $37/hoja color;
+  energía 150 W × 12 h × 26 d × $1.000/kWh = $46.800/mes; 3.000 hojas/mes ≈ $16/hoja.
+  Ficha Ricoh MP C3003: TEC 1,16 kWh/semana, máx. 1.584 W. EPM estrato 4: $885/kWh (nov. 2026).
 - Antes de esta calculadora cobraban b/n $700 y color entre $1.500 y $5.000.
 
 ## Plan por etapas
@@ -88,7 +95,8 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
    vista previa, varios archivos ("+ Agregar otro archivo"), editor de precios, alerta bajo costo.
 3. ⬜ Word/Excel/PowerPoint → PDF vía Office (pywin32 COM); LibreOffice como alternativa;
    mensaje claro si ninguno está.
-4. ⬜ Pantalla de ajustes (todos los valores de config, incl. precio manual por rango).
+4. ✅ Pantalla de ajustes: ventana "Costos" (pestañas + resultado en vivo) y ventana "Precios".
+   El Excel (`generar_tabla_precios.py`) lee la misma config que el programa (`cfg.cargar()`).
 5. ⬜ .exe único con PyInstaller (incluir binarios de tkinterdnd2) + guía de calibración.
 
 ## Notas de la interfaz

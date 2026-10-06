@@ -31,9 +31,24 @@ CONFIG_POR_DEFECTO = {
         "oficio": {"nombre": "Oficio", "ancho_mm": 215.9, "alto_mm": 330.2, "precio_resma": 19000, "hojas_resma": 500},
     },
 
-    # --- Desgaste por página (tambores, revelador, fusor, energía) ---------
-    # PROVISIONAL: estimado; una página a color desgasta 4 unidades de imagen, b/n solo 1.
-    "desgaste_por_pagina": {"color": 40, "bn": 20},
+    # --- Costos del negocio (además de tóner y papel) ----------------------
+    # Mantenimiento: cada repuesto o visita se reparte entre las hojas de su ciclo.
+    # "solo_color": el repuesto solo se gasta con hojas a color (tambores C, M, Y).
+    # ESTIMADOS (oct. 2026): confirmar costos y ciclos con el técnico de la impresora.
+    # Ciclo de 120.000 hojas: típico de kits de fusor Ricoh de esta gama.
+    "mantenimiento": [
+        {"nombre": "Visita técnica preventiva", "costo": 180000, "cada_hojas": 30000, "solo_color": False},
+        {"nombre": "Kit de fusor",               "costo": 1200000, "cada_hojas": 120000, "solo_color": False},
+        {"nombre": "Unidad de imagen negra",     "costo": 500000, "cada_hojas": 120000, "solo_color": False},
+        {"nombre": "Unidades de imagen C, M, Y", "costo": 1500000, "cada_hojas": 120000, "solo_color": True},
+        {"nombre": "Banda de transferencia",     "costo": 900000, "cada_hojas": 200000, "solo_color": False},
+    ],
+    # Energía: costo del mes repartido entre las hojas del mes. Valores ALTOS a propósito:
+    # la ficha Ricoh da 1,16 kWh/semana (uso de oficina con apagado); aquí se asume encendida
+    # todo el día (≈ 9 veces más). EPM estrato 4: $885/kWh (nov. 2026) + margen por recargos.
+    "energia": {"potencia_w": 150, "horas_dia": 12, "dias_mes": 26, "precio_kwh": 1000},
+    "hojas_mes": 3000,         # ESTIMADO: hojas impresas al mes (ver contador de la Ricoh)
+    "capital_pct": 50.0,       # de lo que sobra (venta − costo): % para ahorro e imprevistos
 
     # --- Precio --------------------------------------------------------------
     "margen_pct": 40.0,          # precio = costo / (1 - margen)
