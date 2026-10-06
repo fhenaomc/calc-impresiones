@@ -73,6 +73,9 @@ muestras/                archivos reales de prueba (NO se versionan: datos de cl
 .venv\Scripts\python herramientas\generar_referencias.py
 .venv\Scripts\python herramientas\generar_tabla_precios.py
 ```
+`Abrir cotizador.bat` (raíz del proyecto) abre la interfaz con doble clic. **Mantenerlo al día**
+si cambia la forma de arrancar (otro punto de entrada, otro entorno); al llegar el .exe, decidir
+con Felipe si se conserva para desarrollo.
 No hay LibreOffice en el PC de desarrollo: para recalcular/verificar el .xlsx se usa Excel vía
 pywin32 (`win32com.client.DispatchEx("Excel.Application")`, `CalculateFull`, `Save`).
 Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `fitz`.
