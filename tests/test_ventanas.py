@@ -255,3 +255,21 @@ def test_pixelart_dibuja_logo_e_icono():
     assert pixelart.icono(32).size == (32, 32)
     logo = pixelart.encabezado(2)
     assert logo.height == 64 and logo.width > 300
+
+
+def test_escala_de_pantalla_no_depende_de_decimales():
+    from cotizador import tema
+    assert tema.escala_de_pantalla(95.9) == tema.escala_de_pantalla(96) == 1.0
+    assert tema.escala_de_pantalla(120.1) == 1.25
+    # la sección (1,5 unidades) debe dar 16 px tanto al 100 % como al 125 %
+    assert tema._px8(1.5, 1.0) == tema._px8(1.5, 1.25) == -16
+
+
+def test_errores_quedan_registrados(tmp_path, monkeypatch):
+    monkeypatch.setattr(cfg, "carpeta_programa", lambda: tmp_path)
+    monkeypatch.setattr(interfaz.messagebox, "showerror", lambda *a, **k: None)
+    try:
+        1 / 0
+    except ZeroDivisionError as e:
+        interfaz._avisar_error(type(e), e, e.__traceback__)
+    assert "ZeroDivisionError" in (tmp_path / "errores.log").read_text(encoding="utf-8")

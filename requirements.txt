@@ -5,3 +5,4 @@ tkinterdnd2
 openpyxl
 pywin32
 pytest
+pyinstaller

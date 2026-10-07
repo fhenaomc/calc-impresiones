@@ -16,6 +16,7 @@ Para cambiar colores o letras, edite TEMAS; la lógica del programa no se toca.
 """
 
 import ctypes
+import math
 from pathlib import Path
 
 RECURSOS = Path(__file__).resolve().parent / "recursos"
@@ -103,7 +104,14 @@ def color_rango(nombre: str) -> str:
 
 def _px8(unidades: float, escala: float) -> int:
     """Tamaño en píxeles múltiplo de 8 (para que la letra pixelada se vea nítida). Negativo = píxeles en tkinter."""
-    return -8 * max(1, round(unidades * escala))
+    # floor(x + 0,5) redondea 2,5 -> 3; round() de Python daría 2 ("redondeo bancario")
+    return -8 * max(1, math.floor(unidades * escala + 0.5))
+
+
+def escala_de_pantalla(pixeles_por_pulgada: float) -> float:
+    """1,0 / 1,25 / 1,5... Se ajusta a pasos de 0,25 (las escalas reales de Windows) para que
+    un 95,9 en vez de 96 no cambie el redondeo de los tamaños."""
+    return max(1.0, round(pixeles_por_pulgada / 96 * 4) / 4)
 
 
 def fuentes(tamano_base: int, escala_pantalla: float = 1.0) -> dict:

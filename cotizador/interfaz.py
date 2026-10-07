@@ -17,6 +17,7 @@ Otra idea — se guarda el análisis, no el precio:
 """
 
 import queue
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -55,7 +56,7 @@ class App:
 
         preparar_estilo(config)
         self.C = tema.COLORES
-        self.escala = root.winfo_fpixels("1i") / 96  # 1,25 si Windows está al 125 %
+        self.escala = tema.escala_de_pantalla(root.winfo_fpixels("1i"))  # 1,25 si Windows está al 125 %
         self.F = tema.fuentes(config["apariencia"]["tamano_letra"], self.escala)
         root.title("Net Papelería · Cotizador de impresiones")
         root.configure(bg=self.C["marco"])
@@ -520,12 +521,42 @@ def preparar_estilo(config):
             tema.activar("clasico")
 
 
+def _registrar_error(texto: str) -> Path:
+    """Guarda el error en errores.log junto al programa (el .exe no tiene consola donde verlo)."""
+    import datetime
+    ruta = cfg.carpeta_programa() / "errores.log"
+    try:
+        with open(ruta, "a", encoding="utf-8") as f:
+            f.write(f"\n===== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} =====\n{texto}\n")
+    except OSError:
+        pass
+    return ruta
+
+
+def _avisar_error(tipo, valor, rastro):
+    """Cualquier error inesperado: se registra y se avisa con un mensaje en vez de cerrarse en silencio."""
+    import traceback
+    ruta = _registrar_error("".join(traceback.format_exception(tipo, valor, rastro)))
+    try:
+        messagebox.showerror("Algo salió mal",
+                             "Ocurrió un error inesperado. El programa puede seguir funcionando.\n\n"
+                             f"Si se repite, envíe este archivo a Felipe:\n{ruta}")
+    except Exception:
+        pass
+
+
 def main():
+    sys.excepthook = _avisar_error
     _nitidez_windows()
     config = cfg.cargar()
     preparar_estilo(config)  # antes de crear la ventana: la letra debe existir cuando Tk la pida
     root = TkinterDnD.Tk() if TkinterDnD is not None else tk.Tk()
-    App(root, config)
+    root.report_callback_exception = _avisar_error  # errores dentro de botones y eventos
+    app = App(root, config)
+    # Archivos arrastrados sobre el ícono del programa (o "Abrir con"): llegan como argumentos.
+    archivos = [Path(a) for a in sys.argv[1:] if Path(a).is_file()]
+    if archivos:
+        root.after(300, lambda: app.cargar(archivos))
     root.mainloop()
 
 

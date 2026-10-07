@@ -59,7 +59,9 @@ cotizador/ventana_costos.py   "Costos del negocio": tóner, papel, mantenimiento
 cotizador/tema.py        estilos "pixel" (Net Papelería, por defecto) y "clasico": colores, letras, botones
 cotizador/pixelart.py    sprites en pixel art hechos con código: impresora, logo, ícono de ventana
 cotizador/recursos/      PressStart2P-Regular.ttf + licencia OFL (incluir en el .exe)
-cotizador/formato.py     pesos(), leer_pesos(), hojas()
+cotizador/formato.py     pesos(), leer_pesos(), hojas(), numero(), leer_numero()
+iniciar.py               punto de entrada del .exe (PyInstaller no acepta `-m cotizador`)
+herramientas/construir_exe.py  construye el .exe, el ícono .ico y la carpeta para la USB
 tests/                   pytest con imágenes sintéticas de cobertura conocida
 herramientas/generar_referencias.py   PDFs de referencia por rango (fotos de Windows)
 herramientas/generar_tabla_precios.py documentos/Tabla de precios.xlsx (para aprobación de los dueños)
@@ -74,6 +76,7 @@ muestras/                archivos reales de prueba (NO se versionan: datos de cl
 .venv\Scripts\python -m cotizador.cli muestras\archivo.pdf --detalle --tamano carta --copias 2
 .venv\Scripts\python herramientas\generar_referencias.py
 .venv\Scripts\python herramientas\generar_tabla_precios.py
+.venv\Scripts\python herramientas\construir_exe.py   (≈2 min)
 ```
 `Abrir cotizador.bat` (raíz del proyecto) abre la interfaz con doble clic. **Mantenerlo al día**
 si cambia la forma de arrancar (otro punto de entrada, otro entorno); al llegar el .exe, decidir
@@ -102,7 +105,8 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
    mensaje claro si ninguno está.
 4. ✅ Pantalla de ajustes: ventana "Costos" (pestañas + resultado en vivo) y ventana "Precios".
    El Excel (`generar_tabla_precios.py`) lee la misma config que el programa (`cfg.cargar()`).
-5. ⬜ .exe único con PyInstaller (incluir binarios de tkinterdnd2) + guía de calibración.
+5. ✅ .exe único: `herramientas/construir_exe.py` → `dist/Net Papeleria - Cotizador/` (exe ~52 MB +
+   LEEME.txt + licencia OFL). Probado fuera del proyecto. ⬜ Pendiente: guía de calibración.
 
 ## Notas de la interfaz
 - El análisis corre en un hilo; se comunica con la ventana por `queue.Queue` + `root.after`.
@@ -128,3 +132,17 @@ Entorno: Python 3.14 en `.venv` (ver requirements.txt). Importar `pymupdf`, no `
   (`interfaz.preparar_estilo`). Si falla, se cae al estilo clásico. No tiene ✋ ⚠ −: no usarlos en pixel.
 - "Ricoh MP C3003" va como texto descriptivo; no copiar el logo de Ricoh (marca registrada).
 - PyInstaller: agregar `--add-data "cotizador/recursos;cotizador/recursos"`.
+
+## El .exe (oct. 2026)
+- PyInstaller --onefile --windowed, `--collect-all tkinterdnd2`, `--add-data cotizador/recursos`.
+  Excluye pytest/openpyxl/win32com (solo herramientas). Arranca en ~5-9 s (se descomprime al abrir).
+- config.json y errores.log quedan JUNTO al .exe (`cfg.carpeta_programa()` usa sys.executable).
+  Por eso no instalar en "Archivos de programa" (sin permiso de escritura).
+- Errores no atrapados → `errores.log` + mensaje ("envíe este archivo a Felipe"): `sys.excepthook`
+  y `root.report_callback_exception` en `interfaz.main`.
+- Archivos pasados como argumento (arrastrados sobre el ícono del .exe) se cotizan al abrir.
+- Escala de pantalla: `tema.escala_de_pantalla` cuantiza a pasos de 0,25 y `_px8` redondea con
+  floor(x+0,5): con 95,9 ppp en vez de 96 la letra pixelada se encogía a 8 px.
+- Para actualizar donde los papás: reemplazar SOLO el .exe; conservar config.json (sus precios).
+- Probar el .exe: copiarlo fuera del proyecto, abrirlo con un PDF como argumento, capturar con
+  PrintWindow buscando la ventana por título "Net Papeler…".
